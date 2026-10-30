@@ -1,0 +1,85 @@
+import SwiftUI
+import StudioCore
+
+struct ContentView: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        Group {
+            if let error = model.setupError {
+                SetupMessageView(error: error) { model.resolveTools() }
+            } else if model.rootFolder == nil {
+                VStack(spacing: 12) {
+                    Text("Choose a folder of PlantUML files").font(.title2)
+                    Button("Open Folder…") { model.chooseRoot() }
+                }
+            } else {
+                NavigationSplitView {
+                    SidebarView().navigationSplitViewColumnWidth(min: 180, ideal: 240)
+                } detail: {
+                    detail
+                }
+            }
+        }
+        .frame(minWidth: 900, minHeight: 560)
+        .alert("Unsaved changes", isPresented: Binding(get: { model.pendingSelection != nil }, set: { if !$0 { model.cancelPendingSelection() } })) {
+            Button("Save") { model.resolvePendingSelection(save: true) }
+            Button("Discard", role: .destructive) { model.resolvePendingSelection(save: false) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(model.session?.url.lastPathComponent ?? "This file") has edits that are not saved.")
+        }
+        .alert("File changed on disk", isPresented: $model.showConflict) {
+            Button("Reload from disk") { model.reloadFromDisk() }
+            Button("Keep my edits", role: .cancel) { model.session?.keepMine() }
+        } message: {
+            Text("\(model.session?.url.lastPathComponent ?? "This file") changed outside the app and you have unsaved edits.")
+        }
+    }
+
+    private var detail: some View {
+        VStack(spacing: 0) {
+            if let notice = model.notice { banner(notice) }
+            if let session = model.session {
+                SessionDetail(session: session).id(session.url)
+            } else {
+                Text("Select a diagram").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    private func banner(_ text: String) -> some View {
+        Text(text).font(.callout).frame(maxWidth: .infinity, alignment: .leading).padding(8).background(Color.yellow.opacity(0.2))
+    }
+}
+
+struct SessionDetail: View {
+    @EnvironmentObject var model: AppModel
+    @ObservedObject var session: DocumentSession
+
+    var body: some View {
+        content
+            .navigationTitle(session.url.lastPathComponent + (session.isDirty ? " •" : ""))
+            .toolbar {
+                ToolbarItem { modePicker }
+                ToolbarItem { Button("Save") { model.save() }.disabled(!session.isDirty) }
+            }
+            .onChange(of: model.mode) { _, _ in model.scheduleRender(debounce: false) }
+    }
+
+    @ViewBuilder private var content: some View {
+        if model.mode == .edit {
+            PlaygroundView(session: session)
+        } else {
+            DiagramPane()
+        }
+    }
+
+    private var modePicker: some View {
+        Picker("Mode", selection: $model.mode) {
+            Text("View").tag(ViewMode.view)
+            Text("Edit").tag(ViewMode.edit)
+        }
+        .pickerStyle(.segmented)
+    }
+}
