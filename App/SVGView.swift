@@ -17,7 +17,12 @@ struct SVGView: NSViewRepresentable {
         guard context.coordinator.last != svg else { return }
         context.coordinator.last = svg
         let body = String(decoding: svg, as: UTF8.self)
-        view.loadHTMLString("<html><body style=\"margin:16px;background:#fff\">\(body)</body></html>", baseURL: nil)
+        let html = """
+        <html><body style="margin:0;padding:16px;box-sizing:border-box;min-height:100vh;display:flex;background:#fff">
+        <div style="margin:auto">\(body)</div>
+        </body></html>
+        """
+        view.loadHTMLString(html, baseURL: nil)
     }
 
     final class Coordinator { var last: Data? }
