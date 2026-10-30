@@ -22,9 +22,13 @@ struct SidebarView: View {
     @State private var deleteTarget: URL?
 
     var body: some View {
-        List(model.tree, children: \.children, selection: Binding(get: { model.selection }, set: { model.select($0) })) { node in
-            Label(node.name, systemImage: node.isDirectory ? "folder" : "doc.text")
-                .contextMenu { menu(for: node) }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(model.tree) { node in
+                    TreeRow(node: node, depth: 0) { menu(for: $0) }
+                }
+            }
+            .padding(8)
         }
         .safeAreaInset(edge: .bottom) {
             HStack {
@@ -59,6 +63,55 @@ struct SidebarView: View {
         case .newFile(let folder): model.createFile(named: promptText, in: folder)
         case .newFolder(let folder): model.createFolder(named: promptText, in: folder)
         case .rename(let url): model.rename(url, to: promptText)
+        }
+    }
+}
+
+/// One file or folder row with a grey selected state and a lighter grey hover highlight.
+private struct TreeRow<Menu: View>: View {
+    @EnvironmentObject var model: AppModel
+    let node: FileNode
+    let depth: Int
+    @ViewBuilder let menu: (FileNode) -> Menu
+    @State private var expanded = false
+    @State private var hovering = false
+
+    private var isSelected: Bool { !node.isDirectory && model.selection == node.id }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                if node.isDirectory {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                        .frame(width: 12)
+                    Text(node.name).lineLimit(1)
+                } else {
+                    Label(node.name, systemImage: "doc.text").lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 5)
+            .padding(.leading, 8 + CGFloat(depth) * 14)
+            .padding(.trailing, 8)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Color.primary.opacity(0.16) : (hovering ? Color.primary.opacity(0.08) : Color.clear)))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .onTapGesture {
+                if node.isDirectory { withAnimation(.easeOut(duration: 0.12)) { expanded.toggle() } } else { model.select(node.id) }
+            }
+            .contextMenu { menu(node) }
+
+            if expanded, let children = node.children {
+                ForEach(children) { child in
+                    TreeRow(node: child, depth: depth + 1, menu: menu)
+                }
+            }
+        }
+        .onAppear {
+            if let selection = model.selection, selection.path.hasPrefix(node.id.path + "/") { expanded = true }
         }
     }
 }
