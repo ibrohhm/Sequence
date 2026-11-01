@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct PlantUMLStudioApp: App {
+struct SequenceApp: App {
     @StateObject private var model = AppModel()
 
     init() { NSApplication.shared.setActivationPolicy(.regular) }

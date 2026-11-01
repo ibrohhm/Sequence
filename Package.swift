@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "PlantUMLStudio",
+    name: "SequenceApp",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "PlantUMLStudio", targets: ["PlantUMLStudio"])],
+    products: [.executable(name: "SequenceApp", targets: ["SequenceApp"])],
     targets: [
         .target(name: "StudioCore"),
-        .executableTarget(name: "PlantUMLStudio", dependencies: ["StudioCore"], path: "App", exclude: ["Resources"]),
+        .executableTarget(name: "SequenceApp", dependencies: ["StudioCore"], path: "App", exclude: ["Resources"]),
         .testTarget(name: "StudioCoreTests", dependencies: ["StudioCore"]),
     ]
 )

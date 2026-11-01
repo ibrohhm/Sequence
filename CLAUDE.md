@@ -1,4 +1,4 @@
-# PlantUML Studio
+# Sequence
 
 Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markdown files. Not signed or notarized.
 
@@ -16,7 +16,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 ## Commands
 
 - `./test.sh`: run tests. Only Command Line Tools are installed (macOS too old for Xcode), so tests use Swift Testing with CLT framework flags. Do not use `swift test` directly or XCTest.
-- `./build-app.sh`: build `build/PlantUMLStudio.app`. Quit the running app (⌘Q) first, or reopening shows the old build.
+- `./build-app.sh`: build `build/Sequence.app`. Quit the running app (⌘Q) first, or reopening shows the old build.
 - Run `./test.sh` before every commit.
 
 ## Rules

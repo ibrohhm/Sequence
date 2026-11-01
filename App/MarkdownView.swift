@@ -36,7 +36,7 @@ struct MarkdownView: NSViewRepresentable {
     }
 
     private func load(_ view: WKWebView) {
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("plantuml-studio-\(UUID().uuidString).html")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("sequence-\(UUID().uuidString).html")
         guard (try? Self.page(base: baseDirectory, theme: theme).write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
         view.loadFileURL(file, allowingReadAccessTo: URL(fileURLWithPath: "/"))
     }

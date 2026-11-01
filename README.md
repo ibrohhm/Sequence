@@ -1,4 +1,4 @@
-# PlantUML Studio
+# Sequence
 
 Mac app to browse, view and edit PlantUML diagrams and markdown files from a local folder. Built for reading and writing RFCs with many flows. Personal use, unsigned.
 
@@ -25,7 +25,7 @@ Supported files: `.puml`, `.plantuml`, `.pu`, `.wsd` and `.md`. Frontmatter is h
 
 ```sh
 ./build-app.sh
-open build/PlantUMLStudio.app
+open build/Sequence.app
 ```
 
 Quit the running app (⌘Q) before rebuilding, or reopening shows the old build.
