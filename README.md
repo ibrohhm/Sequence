@@ -10,10 +10,10 @@ Keep your flows next to your RFCs, browse them in a sidebar, and edit with a liv
 - **View, edit, or both.** Switch between View (rendered), Edit (code only) and Edit with preview (code and live render side by side) from the toolbar. Diagrams and markdown share the same three modes.
 - **Markdown with diagrams.** ` ```plantuml `, ` ```puml ` and ` ```uml ` fenced blocks render as diagrams inside the markdown preview. Frontmatter is hidden, and raw HTML is escaped.
 - **Live rendering.** PlantUML runs in one long-lived Java process, so previews update as you type.
-- **Playground.** Two scratch editors, **PlantUML Playground** and **Markdown Playground**, opened from the pencil icon in the sidebar header the File menu, or the empty state when no file is open, always in Edit with preview and with the sidebar hidden (the back arrow in the toolbar returns), for trying a diagram or a markdown snippet without creating a file. Each has its own text, remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
+- **Playground.** Two scratch editors, **PlantUML Playground** and **Markdown Playground**, opened from the pencil icon in the sidebar header, the File menu, or the empty state when no file is open, always in Edit with preview and with the sidebar hidden (the back arrow in the toolbar returns), for trying a diagram or a markdown snippet without creating a file. Each has its own text, remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
 - **Search and file operations.** Filter files by name, and create, rename or delete (to Trash) from the sidebar.
 - **Export and copy.** Save a diagram as SVG or PNG, or right-click any diagram, in the viewer or inside a markdown preview, and choose **Copy Image**.
-- **Light and Dark themes.** A switch in the sidebar overrides the system appearance. Dark follows the VS Code "Dark Modern" palette.
+- **Light and Dark themes.** A toggle in the window toolbar overrides the system appearance. Dark follows the VS Code "Dark Modern" palette.
 - **Safe editing.** The app asks before discarding unsaved changes, and tells you when a file changes on disk while you have edits.
 
 Supported files: `.puml`, `.plantuml`, `.pu`, `.wsd` (diagrams) and `.md` (markdown).

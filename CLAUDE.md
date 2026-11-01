@@ -6,8 +6,8 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 
 - `Sources/StudioCore`: UI-free engine (renderer, scanner, watcher, file ops, `DocumentSession`, `MarkdownPreparer`).
 - `App/`: SwiftUI + AppKit views, `AppModel` (all app state). Each window owns an `AppModel` (`WindowRoot` in `SequenceApp.swift`); menu commands reach the focused window's model through `focusedSceneObject`, and Settings talks to windows by posting `.toolPathsChanged`. Only the first window restores the last folder (`AppModel.claimRestore`).
-  - `RootView`: window root. Picks setup, choose-folder or the sidebar + detail `HSplitView`, and holds app-wide alerts.
-  - `SidebarView`: header (folder menu with New File, New Folder, Change Folder; search; playground menu; theme), "New file" row, top-level folders as sections, nested folders collapsible.
+  - `RootView`: window root; the toolbar holds the theme toggle. Picks setup, choose-folder or the sidebar + detail `HSplitView`, and holds app-wide alerts.
+  - `SidebarView`: header (folder menu with New File, New Folder, Change Folder; search; playground menu), "New file" row, top-level folders as sections, nested folders collapsible.
   - `MainView`: detail pane for the open file. Owns the title, mode picker, Save button and the mode switch (view / edit / editPreview).
 - Playground: scratch files live in Application Support (`Playground` in `StudioCore`), one for PlantUML and one for markdown. `AppModel.inPlayground` is true when the open session is one of them; it hides the sidebar (toolbar back arrow calls `closePlayground()`), forces Edit with preview, autosaves on typing, and swaps the toolbar for Save to folder. The two playgrounds are separate entries in the sidebar header menu and the File menu (⌘⇧P, ⌘⇧M), and the empty "Select a file" state (`PlaygroundChoices` in `RootView`: rows styled like sidebar rows, also on the choose-folder screen); there is no language switch.
 - `DiagramWebView` backs both web views (`SVGView`, `MarkdownView`). A `contextmenu` script reports the SVG under the cursor; the native menu then shows only Copy Image (a WebKit snapshot of that SVG); WebKit's default items, such as Reload, are removed.
@@ -33,7 +33,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 - `WindowConfigurator` removes the full-size content view so content never slides under the toolbar when the window resizes or the sidebar toggles.
 - Layout is a plain `HSplitView`, not `NavigationSplitView`: on macOS 26 the latter draws the sidebar as a floating glass panel that cannot be turned off. Sidebar is a custom tree, not `List`, so hover and selection styling stay controllable. Do not switch back.
 - Can't screenshot the UI here. Say when UI changes are unverified.
-- After every change, update `README.md` and this file if features, layout, commands or rules changed. Commit them with the change.
+- After every change, update this file if features, layout, commands or rules changed. Commit it with the change.
 
 ## Git
 

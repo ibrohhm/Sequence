@@ -24,6 +24,10 @@ struct RootView: View {
                     detail.frame(minWidth: 500)
                 }
                 .toolbar {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { model.theme = model.theme.toggled } label: { Image(systemName: model.theme == .dark ? "sun.max" : "moon") }
+                            .help(model.theme == .dark ? "Switch to light theme" : "Switch to dark theme")
+                    }
                     if !model.inPlayground {
                         ToolbarItem(placement: .navigation) {
                             Button { model.showSidebar.toggle() } label: { Image(systemName: "sidebar.left") }

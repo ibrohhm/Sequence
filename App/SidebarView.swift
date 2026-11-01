@@ -59,9 +59,6 @@ struct SidebarView: View {
             Spacer(minLength: 0)
             IconButton(symbol: "magnifyingglass", help: "Search files") { toggleSearch() }
             PlaygroundMenu()
-            IconButton(symbol: model.theme == .dark ? "sun.max" : "moon", help: model.theme == .dark ? "Switch to light theme" : "Switch to dark theme") {
-                model.theme = model.theme.toggled
-            }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
     }
