@@ -8,7 +8,7 @@ struct SVGView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
-        let view = WKWebView()
+        let view = DiagramWebView.make()
         view.allowsMagnification = true
         view.setValue(false, forKey: "drawsBackground")
         return view

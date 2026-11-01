@@ -1,0 +1,59 @@
+import AppKit
+import WebKit
+
+/// A web view whose right-click menu offers Copy Image when the click lands on a diagram.
+final class DiagramWebView: WKWebView {
+    private var hitRect: CGRect?
+
+    static func make() -> DiagramWebView {
+        let router = Router()
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.add(router, name: "diagramContext")
+        configuration.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        let view = DiagramWebView(frame: .zero, configuration: configuration)
+        router.view = view
+        return view
+    }
+
+    private static let script = """
+    document.addEventListener('contextmenu', function (e) {
+      var s = e.target && e.target.closest ? e.target.closest('svg') : null;
+      var msg = {};
+      if (s) { var r = s.getBoundingClientRect(); msg = { x: r.x, y: r.y, width: r.width, height: r.height }; }
+      window.webkit.messageHandlers.diagramContext.postMessage(msg);
+    }, true);
+    """
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        guard hitRect != nil else { return }
+        let copyImage = NSMenuItem(title: "Copy Image", action: #selector(copyImage), keyEquivalent: "")
+        copyImage.target = self
+        menu.insertItem(copyImage, at: 0)
+        menu.insertItem(.separator(), at: 1)
+    }
+
+    @objc private func copyImage() {
+        guard let hitRect else { return }
+        let configuration = WKSnapshotConfiguration()
+        configuration.rect = hitRect
+        configuration.afterScreenUpdates = true
+        takeSnapshot(with: configuration) { image, _ in
+            guard let image else { return }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.writeObjects([image])
+        }
+    }
+
+    fileprivate func setHit(_ body: Any) {
+        guard let d = body as? [String: Any],
+              let x = d["x"] as? Double, let y = d["y"] as? Double, let w = d["width"] as? Double, let h = d["height"] as? Double
+        else { hitRect = nil; return }
+        hitRect = CGRect(x: x, y: y, width: w, height: h)
+    }
+
+    private final class Router: NSObject, WKScriptMessageHandler {
+        weak var view: DiagramWebView?
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) { view?.setHit(message.body) }
+    }
+}

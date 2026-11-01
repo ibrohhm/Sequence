@@ -12,7 +12,7 @@ Keep your flows next to your RFCs, browse them in a sidebar, and edit with a liv
 - **Live rendering.** PlantUML runs in one long-lived Java process, so previews update as you type.
 - **Playground.** A scratch editor at the top of the sidebar, always in Edit with preview, for trying a diagram or a markdown snippet without creating a file. It starts as PlantUML, with a switch to Markdown. Its text is remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
 - **Search and file operations.** Filter files by name, and create, rename or delete (to Trash) from the sidebar.
-- **Export.** Save a diagram as SVG or PNG.
+- **Export and copy.** Save a diagram as SVG or PNG, or right-click any diagram, in the viewer or inside a markdown preview, and choose **Copy Image**.
 - **Light and Dark themes.** A switch in the sidebar overrides the system appearance. Dark follows the VS Code "Dark Modern" palette.
 - **Safe editing.** The app asks before discarding unsaved changes, and tells you when a file changes on disk while you have edits.
 

@@ -20,7 +20,7 @@ struct MarkdownView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
-        let view = WKWebView()
+        let view = DiagramWebView.make()
         view.navigationDelegate = context.coordinator
         view.setValue(false, forKey: "drawsBackground")
         context.coordinator.webView = view
