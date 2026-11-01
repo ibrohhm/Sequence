@@ -62,3 +62,13 @@ private func tempFolder() throws -> URL {
         #expect(!FileManager.default.fileExists(atPath: url.path))
     }
 }
+
+@Suite struct MarkdownCreateTests {
+    @Test func createMarkdownFileKeepsMdExtensionAndWritesHeading() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("md \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = try LibraryOperations.createFile(named: "rfc.md", in: dir)
+        #expect(url.lastPathComponent == "rfc.md")
+        #expect(try String(contentsOf: url, encoding: .utf8).hasPrefix("# "))
+    }
+}

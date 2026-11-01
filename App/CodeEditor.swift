@@ -3,6 +3,7 @@ import AppKit
 
 struct CodeEditor: NSViewRepresentable {
     @Binding var text: String
+    var highlightsPlantUML = true
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -17,7 +18,7 @@ struct CodeEditor: NSViewRepresentable {
         textView.allowsUndo = true
         textView.delegate = context.coordinator
         textView.string = text
-        Coordinator.highlight(textView)
+        Coordinator.highlight(textView, enabled: highlightsPlantUML)
         scroll.verticalRulerView = LineNumberRuler(textView: textView)
         scroll.hasVerticalRuler = true
         scroll.rulersVisible = true
@@ -29,7 +30,7 @@ struct CodeEditor: NSViewRepresentable {
         context.coordinator.parent = self
         if textView.string != text {
             textView.string = text
-            Coordinator.highlight(textView)
+            Coordinator.highlight(textView, enabled: highlightsPlantUML)
         }
     }
 
@@ -40,10 +41,11 @@ struct CodeEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
-            Self.highlight(textView)
+            Self.highlight(textView, enabled: parent.highlightsPlantUML)
         }
 
-        static func highlight(_ textView: NSTextView) {
+        static func highlight(_ textView: NSTextView, enabled: Bool) {
+            guard enabled else { return }
             guard let storage = textView.textStorage else { return }
             let full = NSRange(location: 0, length: storage.length)
             storage.beginEditing()

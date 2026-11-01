@@ -15,9 +15,11 @@ public struct FileNode: Identifiable, Hashable {
 }
 
 public enum LibraryScanner {
-    public static let extensions: Set<String> = ["puml", "plantuml", "pu", "wsd"]
+    public static let diagramExtensions: Set<String> = ["puml", "plantuml", "pu", "wsd"]
+    public static let markdownExtensions: Set<String> = ["md"]
+    public static let extensions = diagramExtensions.union(markdownExtensions)
 
-    /// Returns the diagram files under `root`, with folders first and each group sorted A–Z ignoring case.
+    /// Returns the diagram and markdown files under `root`, with folders first and each group sorted A–Z ignoring case.
     public static func scan(_ root: URL) throws -> [FileNode] {
         let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
         let entries = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])

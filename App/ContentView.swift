@@ -10,7 +10,7 @@ struct ContentView: View {
                 SetupMessageView(error: error) { model.resolveTools() }
             } else if model.rootFolder == nil {
                 VStack(spacing: 12) {
-                    Text("Choose a folder of PlantUML files").font(.title2)
+                    Text("Choose a folder of PlantUML and markdown files").font(.title2)
                     Button("Open Folder…") { model.chooseRoot() }
                 }
             } else {
@@ -43,7 +43,7 @@ struct ContentView: View {
             if let session = model.session {
                 SessionDetail(session: session).id(session.url)
             } else {
-                Text("Select a diagram").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("Select a file").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
@@ -67,19 +67,36 @@ struct SessionDetail: View {
             .onChange(of: model.mode) { _, _ in model.scheduleRender(debounce: false) }
     }
 
+    private var isMarkdown: Bool { DocumentKind(url: session.url) == .markdown }
+
     @ViewBuilder private var content: some View {
-        if model.mode == .edit {
-            PlaygroundView(session: session)
-        } else {
+        if isMarkdown {
+            switch model.mode {
+            case .view: MarkdownPane(url: session.url)
+            case .edit: CodeEditor(text: $session.text, highlightsPlantUML: false)
+            case .editPreview: MarkdownEditPreview(session: session)
+            }
+        } else if model.mode == .view {
             DiagramPane()
+        } else {
+            PlaygroundView(session: session)
         }
     }
 
-    private var modePicker: some View {
-        Picker("Mode", selection: $model.mode) {
-            Text("View").tag(ViewMode.view)
-            Text("Edit").tag(ViewMode.edit)
+    @ViewBuilder private var modePicker: some View {
+        if isMarkdown {
+            Picker("Mode", selection: $model.mode) {
+                Text("View").tag(ViewMode.view)
+                Text("Edit").tag(ViewMode.edit)
+                Text("Edit with preview").tag(ViewMode.editPreview)
+            }
+            .pickerStyle(.segmented)
+        } else {
+            Picker("Mode", selection: Binding(get: { model.mode == .view ? ViewMode.view : .edit }, set: { model.mode = $0 })) {
+                Text("View").tag(ViewMode.view)
+                Text("Edit").tag(ViewMode.edit)
+            }
+            .pickerStyle(.segmented)
         }
-        .pickerStyle(.segmented)
     }
 }

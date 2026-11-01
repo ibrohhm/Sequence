@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import StudioCore
 
-enum ViewMode: String { case view, edit }
+enum ViewMode: String { case view, edit, editPreview }
 
 @MainActor final class AppModel: ObservableObject {
     @Published var rootFolder: URL?
@@ -11,6 +11,7 @@ enum ViewMode: String { case view, edit }
     @Published var session: DocumentSession?
     @Published var mode: ViewMode = .view
     @Published var lastSVG: Data?
+    @Published var markdownPreview: MarkdownPreview?
     @Published var renderError: String?
     @Published var isRendering = false
     @Published var setupError: ToolError?
@@ -127,7 +128,9 @@ enum ViewMode: String { case view, edit }
             selection = url
             notice = nil
             lastSVG = nil
+            markdownPreview = nil
             renderError = nil
+            if DocumentKind(url: url) == .markdown { mode = .view }
             defaults.set(url.path, forKey: "lastFile")
             scheduleRender(debounce: false)
         } catch {
@@ -137,9 +140,14 @@ enum ViewMode: String { case view, edit }
 
     func scheduleRender(debounce: Bool) {
         renderTask?.cancel()
-        guard let session, let renderer else { return }
+        guard let session else { return }
         let source = session.text
         let base = session.url.deletingLastPathComponent()
+        if DocumentKind(url: session.url) == .markdown {
+            renderMarkdown(source, base: base, renderer: renderer, debounce: debounce)
+            return
+        }
+        guard let renderer else { return }
         renderTask = Task { [weak self] in
             if debounce { try? await Task.sleep(for: .milliseconds(300)) }
             if Task.isCancelled { return }
@@ -155,6 +163,31 @@ enum ViewMode: String { case view, edit }
         }
     }
 
+    private func renderMarkdown(_ source: String, base: URL, renderer: PlantUMLRenderer?, debounce: Bool) {
+        let prepared = MarkdownPreparer.prepare(source)
+        let previous = markdownPreview?.diagrams ?? []
+        var diagrams = prepared.diagrams.indices.map { $0 < previous.count ? previous[$0] : MarkdownDiagram() }
+        markdownPreview = MarkdownPreview(markdown: prepared.markdown, diagrams: diagrams)
+        renderTask = Task { [weak self] in
+            if debounce && !prepared.diagrams.isEmpty { try? await Task.sleep(for: .milliseconds(300)) }
+            for (index, diagram) in prepared.diagrams.enumerated() {
+                guard let renderer else {
+                    diagrams[index] = MarkdownDiagram(error: "Java not found. Diagram not rendered.")
+                    continue
+                }
+                let result = await renderer.render(diagram, baseDirectory: base)
+                if Task.isCancelled { return }
+                switch result {
+                case .svg(let data): diagrams[index] = MarkdownDiagram(svg: String(decoding: data, as: UTF8.self))
+                case .failure(let message): diagrams[index] = MarkdownDiagram(error: message)
+                case .superseded: break
+                }
+                self?.markdownPreview = MarkdownPreview(markdown: prepared.markdown, diagrams: diagrams)
+            }
+            if renderer == nil { self?.markdownPreview = MarkdownPreview(markdown: prepared.markdown, diagrams: diagrams) }
+        }
+    }
+
     func save() {
         guard let session else { return }
         do { try session.save(); notice = nil } catch { notice = "Save failed: \(error.localizedDescription)" }
@@ -166,12 +199,12 @@ enum ViewMode: String { case view, edit }
     }
 
     func exportSVG() {
-        guard let data = lastSVG, let session else { return }
+        guard let data = lastSVG, let session, DocumentKind(url: session.url) == .diagram else { return }
         saveDialog(name: session.url.deletingPathExtension().lastPathComponent + ".svg") { try data.write(to: $0) }
     }
 
     func exportPNG() {
-        guard let session, let javaURL else { return }
+        guard let session, let javaURL, DocumentKind(url: session.url) == .diagram else { return }
         let source = session.text, base = session.url.deletingLastPathComponent(), jar = jarURL, dot = dotURL
         let name = session.url.deletingPathExtension().lastPathComponent + ".png"
         Task {

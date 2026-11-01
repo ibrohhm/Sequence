@@ -15,15 +15,15 @@ private func touch(_ root: URL, _ path: String) throws {
 }
 
 @Suite struct LibraryScannerTests {
-    @Test func scanIncludesOnlyDiagramExtensions() throws {
+    @Test func scanIncludesOnlyDiagramAndMarkdownExtensions() throws {
         let root = try tempRoot()
-        try touch(root, "a.puml"); try touch(root, "b.wsd"); try touch(root, "c.txt")
-        #expect(try LibraryScanner.scan(root).map(\.name) == ["a.puml", "b.wsd"])
+        try touch(root, "a.puml"); try touch(root, "b.wsd"); try touch(root, "c.txt"); try touch(root, "d.md"); try touch(root, "e.mdx")
+        #expect(try LibraryScanner.scan(root).map(\.name) == ["a.puml", "b.wsd", "d.md"])
     }
 
-    @Test func scanOmitsFoldersWithNoDiagrams() throws {
+    @Test func scanOmitsFoldersWithNoSupportedFiles() throws {
         let root = try tempRoot()
-        try touch(root, "docs/readme.md"); try touch(root, "flows/pay.puml")
+        try touch(root, "docs/readme.txt"); try touch(root, "flows/pay.puml")
         #expect(try LibraryScanner.scan(root).map(\.name) == ["flows"])
     }
 

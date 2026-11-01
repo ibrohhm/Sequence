@@ -3,13 +3,14 @@ import Foundation
 public enum LibraryOperationError: Error, Equatable { case alreadyExists, invalidName }
 
 public enum LibraryOperations {
-    /// Creates a starter diagram, adding `.puml` when `named` has no diagram extension.
+    /// Creates a starter file, adding `.puml` when `named` has no supported extension.
     public static func createFile(named name: String, in folder: URL) throws -> URL {
         let trimmed = try validated(name)
         let fileName = LibraryScanner.extensions.contains((trimmed as NSString).pathExtension.lowercased()) ? trimmed : trimmed + ".puml"
         let url = folder.appendingPathComponent(fileName)
         guard !FileManager.default.fileExists(atPath: url.path) else { throw LibraryOperationError.alreadyExists }
-        try "@startuml\n@enduml\n".write(to: url, atomically: true, encoding: .utf8)
+        let starter = DocumentKind(url: url) == .markdown ? "# \(url.deletingPathExtension().lastPathComponent)\n" : "@startuml\n@enduml\n"
+        try starter.write(to: url, atomically: true, encoding: .utf8)
         return url
     }
 
