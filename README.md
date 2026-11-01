@@ -5,8 +5,8 @@ Mac app to browse, view and edit PlantUML diagrams and markdown files from a loc
 ## Features
 
 - Sidebar tree of the files in a root folder. Create, rename and delete (to Trash) from the tree. The tree updates when files change on disk.
-- Click a diagram to see it rendered. Edit shows code on the left and a live render on the right.
-- Markdown files open rendered. The mode picker has View, Edit (code only) and Edit with preview (code and live render side by side).
+- Click a file to see it rendered. Diagrams and markdown share three modes: View (rendered), Edit (code only) and Edit with preview (code on the left, live render on the right).
+- Markdown files open in View mode.
 - ```` ```plantuml ````, ```` ```puml ```` and ```` ```uml ```` blocks in markdown render as diagrams inline.
 - Export a diagram as SVG or PNG.
 - Asks before discarding unsaved changes, and when a file changes on disk while you have edits.

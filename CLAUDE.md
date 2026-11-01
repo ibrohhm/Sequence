@@ -6,6 +6,9 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 
 - `Sources/StudioCore`: UI-free engine (renderer, scanner, watcher, file ops, `DocumentSession`, `MarkdownPreparer`).
 - `App/`: SwiftUI + AppKit views, `AppModel` (all app state).
+  - `RootView`: window root. Picks setup, choose-folder or the sidebar + detail split, and holds app-wide alerts.
+  - `SidebarView`: custom file tree.
+  - `MainView`: detail pane for the open file. Owns the title, mode picker, Save button and the mode switch (view / edit / editPreview).
 - `App/Resources`: `plantuml.jar` (bundled), `marked.min.js` (markdown parser), `PLANTUML_VERSION`.
 - `Tests/StudioCoreTests`: Swift Testing suites.
 - `docs/superpowers/`: design spec and plan.
@@ -26,6 +29,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 - Supported files: `.puml .plantuml .pu .wsd` (diagrams), `.md` (markdown). `.mdx` is out of scope.
 - Sidebar is a custom tree, not `List`, so hover and selection styling stay controllable. Do not switch back.
 - Can't screenshot the UI here. Say when UI changes are unverified.
+- After every change, update `README.md` and this file if features, layout, commands or rules changed. Commit them with the change.
 
 ## Git
 
