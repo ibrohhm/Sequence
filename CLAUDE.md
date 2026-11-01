@@ -9,6 +9,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
   - `RootView`: window root. Picks setup, choose-folder or the sidebar + detail `HSplitView`, and holds app-wide alerts.
   - `SidebarView`: header (folder menu, search, theme), "New file" row, top-level folders as sections, nested folders collapsible.
   - `MainView`: detail pane for the open file. Owns the title, mode picker, Save button and the mode switch (view / edit / editPreview).
+- Playground: scratch files live in Application Support (`Playground` in `StudioCore`), one for PlantUML and one for markdown. `AppModel.inPlayground` is true when the open session is one of them; it forces Edit with preview, autosaves on typing, and swaps the toolbar for a language switch and Save to folder.
 - `App/Resources`: `plantuml.jar` (bundled), `marked.min.js` (markdown parser), `AppIcon.icns`, `PLANTUML_VERSION`.
 - `Tests/StudioCoreTests`: Swift Testing suites.
 - `docs/superpowers/`: design spec and plan.

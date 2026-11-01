@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import StudioCore
+import UniformTypeIdentifiers
 
 enum ViewMode: String { case view, edit, editPreview }
 
@@ -11,6 +12,9 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var session: DocumentSession?
     @Published var mode: ViewMode = .view
     @Published var showSidebar = true
+    @Published private(set) var playgroundKind: DocumentKind = .diagram
+    private let playgroundDirectory = Playground.defaultDirectory()
+    private var modeBeforePlayground: ViewMode?
     @Published var theme: Theme = .light {
         didSet { defaults.set(theme.rawValue, forKey: "theme") }
     }
@@ -36,6 +40,7 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     init() {
+        playgroundKind = defaults.string(forKey: "playgroundKind") == "markdown" ? .markdown : .diagram
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
         resolveTools()
         if let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
@@ -107,6 +112,7 @@ enum ViewMode: String { case view, edit, editPreview }
 
     func select(_ url: URL?) {
         guard let url, LibraryScanner.extensions.contains(url.pathExtension.lowercased()) else { return }
+        if inPlayground, session?.isDirty == true { save() }
         if let current = session, current.isDirty, current.url != url {
             pendingSelection = url
             return
@@ -135,7 +141,15 @@ enum ViewMode: String { case view, edit, editPreview }
             lastSVG = nil
             markdownPreview = nil
             renderError = nil
-            if DocumentKind(url: url) == .markdown { mode = .view }
+            if Playground.contains(url, in: playgroundDirectory) {
+                if modeBeforePlayground == nil { modeBeforePlayground = mode }
+                mode = .editPreview
+                playgroundKind = DocumentKind(url: url)
+                defaults.set(playgroundKind == .markdown ? "markdown" : "diagram", forKey: "playgroundKind")
+            } else {
+                if let saved = modeBeforePlayground { mode = saved; modeBeforePlayground = nil }
+                if DocumentKind(url: url) == .markdown { mode = .view }
+            }
             defaults.set(url.path, forKey: "lastFile")
             scheduleRender(debounce: false)
         } catch {
@@ -146,6 +160,7 @@ enum ViewMode: String { case view, edit, editPreview }
     func scheduleRender(debounce: Bool) {
         renderTask?.cancel()
         guard let session else { return }
+        if debounce, inPlayground { try? session.save() }
         let source = session.text
         let base = session.url.deletingLastPathComponent()
         if DocumentKind(url: session.url) == .markdown {
@@ -230,8 +245,47 @@ enum ViewMode: String { case view, edit, editPreview }
 
     // MARK: sidebar operations
 
-    func createFile(named name: String, in folder: URL?) { perform { let url = try LibraryOperations.createFile(named: name, in: folder ?? rootFolder!); rescan(); select(url) } }
-    func createFolder(named name: String, in folder: URL?) { perform { _ = try LibraryOperations.createFolder(named: name, in: folder ?? rootFolder!); rescan() } }
+    func createFile(named name: String, in folder: URL?) {
+        guard let target = folder ?? rootFolder else { notice = "Open a folder first."; return }
+        perform { let url = try LibraryOperations.createFile(named: name, in: target); rescan(); select(url) }
+    }
+
+    func createFolder(named name: String, in folder: URL?) {
+        guard let target = folder ?? rootFolder else { notice = "Open a folder first."; return }
+        perform { _ = try LibraryOperations.createFolder(named: name, in: target); rescan() }
+    }
+
+    // MARK: playground
+
+    var inPlayground: Bool {
+        guard let session else { return false }
+        return Playground.contains(session.url, in: playgroundDirectory)
+    }
+
+    /// Opens the scratch editor for `kind` (the last one used by default). Its text is kept between launches.
+    func openPlayground(kind: DocumentKind? = nil) {
+        guard let url = try? Playground.ensureFile(for: kind ?? playgroundKind, in: playgroundDirectory) else {
+            notice = "Could not open the playground."
+            return
+        }
+        select(url)
+    }
+
+    /// Writes the playground text to a file the user picks, then opens it from the library.
+    func saveCopyOfPlayground() {
+        guard let session, inPlayground else { return }
+        let ext = playgroundKind == .markdown ? "md" : "puml"
+        let panel = NSSavePanel()
+        panel.directoryURL = rootFolder
+        panel.nameFieldStringValue = "untitled.\(ext)"
+        if let type = UTType(filenameExtension: ext) { panel.allowedContentTypes = [type] }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try session.text.write(to: url, atomically: true, encoding: .utf8)
+            rescan()
+            select(url)
+        } catch { notice = "Save failed: \(error.localizedDescription)" }
+    }
 
     func rename(_ url: URL, to name: String) {
         perform {

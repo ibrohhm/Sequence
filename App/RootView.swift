@@ -8,10 +8,11 @@ struct RootView: View {
         Group {
             if let error = model.setupError {
                 SetupMessageView(error: error) { model.resolveTools() }
-            } else if model.rootFolder == nil {
+            } else if model.rootFolder == nil && !model.inPlayground {
                 VStack(spacing: 12) {
                     Text("Choose a folder of PlantUML and markdown files").font(.title2)
                     Button("Open Folder…") { model.chooseRoot() }
+                    Button("Open Playground") { model.openPlayground() }
                 }
             } else {
                 HSplitView {

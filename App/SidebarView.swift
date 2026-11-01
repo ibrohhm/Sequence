@@ -87,6 +87,7 @@ struct SidebarView: View {
     @ViewBuilder private var list: some View {
         VStack(alignment: .leading, spacing: 2) {
             if query.isEmpty {
+                ActionRow(title: "Playground", symbol: "square.and.pencil", selected: model.inPlayground) { model.openPlayground() }
                 ActionRow(title: "New file", symbol: "plus") { promptText = ""; prompt = .newFile(nil) }
                 ForEach(model.tree.filter { !$0.isDirectory }) { TreeRow(node: $0, depth: 0) { menu(for: $0) } }
                 ForEach(model.tree.filter(\.isDirectory)) { section($0) }
@@ -189,6 +190,7 @@ private struct ActionRow: View {
     @EnvironmentObject var model: AppModel
     let title: String
     let symbol: String
+    var selected = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -200,7 +202,7 @@ private struct ActionRow: View {
         }
         .font(.system(size: 13))
         .padding(.vertical, 5).padding(.horizontal, 8)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
+        .background(RoundedRectangle(cornerRadius: 6).fill(selected ? model.theme.selectedRow : (hovering ? model.theme.hoverRow : Color.clear)))
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(perform: action)

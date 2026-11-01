@@ -10,10 +10,15 @@ struct MainView: View {
             Rectangle().fill(Color(nsColor: .separatorColor)).frame(height: 0.5)
             content
         }
-            .navigationTitle(session.url.lastPathComponent + (session.isDirty ? " •" : ""))
+            .navigationTitle(model.inPlayground ? "Playground" : session.url.lastPathComponent + (session.isDirty ? " •" : ""))
             .toolbar {
-                ToolbarItem { modePicker }
-                ToolbarItem { Button("Save") { model.save() }.disabled(!session.isDirty) }
+                if model.inPlayground {
+                    ToolbarItem { languagePicker }
+                    ToolbarItem { Button("Save to folder…") { model.saveCopyOfPlayground() } }
+                } else {
+                    ToolbarItem { modePicker }
+                    ToolbarItem { Button("Save") { model.save() }.disabled(!session.isDirty) }
+                }
             }
             .onChange(of: model.mode) { _, _ in model.scheduleRender(debounce: false) }
     }
@@ -29,6 +34,14 @@ struct MainView: View {
         case .editPreview:
             if isMarkdown { MarkdownEditPreview(session: session) } else { PlaygroundView(session: session) }
         }
+    }
+
+    private var languagePicker: some View {
+        Picker("Language", selection: Binding(get: { model.playgroundKind }, set: { model.openPlayground(kind: $0) })) {
+            Text("PlantUML").tag(DocumentKind.diagram)
+            Text("Markdown").tag(DocumentKind.markdown)
+        }
+        .pickerStyle(.segmented)
     }
 
     private var modePicker: some View {

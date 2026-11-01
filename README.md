@@ -1,54 +1,106 @@
 # Sequence
 
-Mac app to browse, view and edit PlantUML diagrams and markdown files from a local folder. Built for reading and writing RFCs with many flows. Personal use, unsigned.
+A native macOS app for reading and writing PlantUML diagrams and markdown from a folder on your disk.
+
+Keep your flows next to your RFCs, browse them in a sidebar, and edit with a live preview. Everything stays local: no account, no cloud, no import step.
 
 ## Features
 
-- Sidebar for the root folder. The header shows the folder name with a menu (new file, new folder, change folder), a search that filters files by name, and the theme button. Top-level folders are sections. The sidebar button at the top left of the toolbar (⌘⌃S) shows or hides it. Create, rename and delete (to Trash) from the right-click menu. The tree updates when files change on disk.
-- Click a file to see it rendered. Diagrams and markdown share three modes, picked with the icon switch in the toolbar: View (eye, rendered), Edit (pencil, code only) and Edit with preview (split pane, code on the left, live render on the right).
-- Markdown files open in View mode.
-- ```` ```plantuml ````, ```` ```puml ```` and ```` ```uml ```` blocks in markdown render as diagrams inline.
-- Light and Dark themes, switched with the sun/moon button in the sidebar header. The choice overrides macOS and is remembered. Dark follows the VS Code "Dark Modern" palette. Diagrams sit on a white card in Dark.
-- Export a diagram as SVG or PNG.
-- Asks before discarding unsaved changes, and when a file changes on disk while you have edits.
+- **Folder as a library.** Open any folder. Files appear in a sidebar, with top-level folders as sections. The tree updates when files change on disk.
+- **View, edit, or both.** Switch between View (rendered), Edit (code only) and Edit with preview (code and live render side by side) from the toolbar. Diagrams and markdown share the same three modes.
+- **Markdown with diagrams.** ` ```plantuml `, ` ```puml ` and ` ```uml ` fenced blocks render as diagrams inside the markdown preview. Frontmatter is hidden, and raw HTML is escaped.
+- **Live rendering.** PlantUML runs in one long-lived Java process, so previews update as you type.
+- **Playground.** A scratch editor at the top of the sidebar, always in Edit with preview, for trying a diagram or a markdown snippet without creating a file. It starts as PlantUML, with a switch to Markdown. Its text is remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
+- **Search and file operations.** Filter files by name, and create, rename or delete (to Trash) from the sidebar.
+- **Export.** Save a diagram as SVG or PNG.
+- **Light and Dark themes.** A switch in the sidebar overrides the system appearance. Dark follows the VS Code "Dark Modern" palette.
+- **Safe editing.** The app asks before discarding unsaved changes, and tells you when a file changes on disk while you have edits.
 
-Supported files: `.puml`, `.plantuml`, `.pu`, `.wsd` and `.md`. Frontmatter is hidden in the markdown preview. `.mdx` is not supported.
+Supported files: `.puml`, `.plantuml`, `.pu`, `.wsd` (diagrams) and `.md` (markdown).
 
 ## Requirements
 
-- macOS 14 or later.
-- Java. The app does not bundle it. On Homebrew: `brew install openjdk`. The app also finds it in `/opt/homebrew/opt/openjdk`, `/usr/local/opt/openjdk` and `/usr/local/bin`, or you can set the path in Settings.
-- Graphviz is optional. Without it PlantUML uses its built-in layout, which handles class, component, use case, state and activity diagrams.
-- Swift command line tools to build. Xcode is not needed.
+- macOS 14 or later
+- Java (not bundled). Install one with Homebrew: `brew install openjdk`
+- Swift command line tools, to build. Xcode is not needed.
+- Graphviz (optional). Without it PlantUML falls back to its built-in layout engine, which handles class, component, use case, state and activity diagrams.
+
+The app looks for Java in the common Homebrew locations. If yours is elsewhere, set the path in **Settings** (⌘,).
 
 ## Build and run
 
 ```sh
+git clone <repo-url> sequence
+cd sequence
 ./build-app.sh
 open build/Sequence.app
 ```
 
-Quit the running app (⌘Q) before rebuilding, or reopening shows the old build.
+`build-app.sh` compiles the Swift package and assembles an unsigned `Sequence.app` in `build/`, with the PlantUML jar bundled inside. Quit a running copy (⌘Q) before rebuilding, or reopening shows the old build.
 
-On first launch choose a root folder. The app remembers it and the last open file.
+On first launch, choose a folder. The app remembers it and the last file you opened.
 
-## Test
+## Usage
+
+| Action | Shortcut |
+|---|---|
+| Open folder | ⌘O |
+| Save | ⌘S |
+| Show or hide sidebar | ⌘⌃S |
+| Settings | ⌘, |
+
+Export SVG and PNG are in the File menu.
+
+A markdown file can embed a diagram like this:
+
+````markdown
+# Purchase flow
+
+```plantuml
+@startuml
+Client -> Service: POST /purchase
+Service --> Client: 202 Accepted
+@enduml
+```
+````
+
+A block without `@startuml` / `@enduml` is wrapped automatically. Relative `!include` paths resolve against the file's folder.
+
+## How it works
+
+- **Rendering.** The bundled `plantuml.jar` runs as `java -jar plantuml.jar -pipe -tsvg`, and requests are serialized through a single actor. A watchdog restarts the process if it stalls.
+- **Safety.** Remote includes and URLs in diagram source are blocked, and the markdown preview escapes raw HTML, so opening a document cannot fetch or run remote content.
+- **UI.** SwiftUI and AppKit. Diagrams and markdown are shown in web views. The editor is a native text view with line numbers.
+
+## Development
 
 ```sh
 ./test.sh
 ```
 
-This runs the Swift Testing suites against the Command Line Tools frameworks. Plain `swift test` does not work without Xcode.
+The tests use Swift Testing against the Command Line Tools frameworks, so plain `swift test` does not work without Xcode.
 
-## Notes
+```
+Sources/StudioCore   UI-free engine: renderer, scanner, watcher, file operations, documents
+App                  SwiftUI and AppKit views, and the app model
+App/Resources        Bundled PlantUML jar, markdown parser, icon
+Tests/StudioCoreTests
+docs/superpowers     Original design spec and implementation plan
+```
 
-- Diagrams render through one long-lived `java -jar plantuml.jar -pipe` process. The jar is bundled in `App/Resources`.
-- Remote includes and URLs in diagram source are blocked.
-- Raw HTML in markdown is escaped in the preview.
+Logic lives in `StudioCore` and is covered by tests. Views in `App` are not unit tested.
 
-## Layout
+## Limitations
 
-- `Sources/StudioCore`: engine with no UI (renderer, scanner, watcher, file operations, document sessions, markdown preparation).
-- `App`: SwiftUI and AppKit views, and `AppModel`.
-- `Tests/StudioCoreTests`: tests.
-- `docs/superpowers`: design spec and implementation plan.
+- Requires Java at runtime.
+- The app is unsigned, and meant to be built from source.
+- `.mdx` is not supported, and there is no Confluence import.
+
+## Third-party software
+
+- [PlantUML](https://plantuml.com) renders the diagrams. The bundled jar is version 1.2026.9, under its own license.
+- [marked](https://github.com/markedjs/marked) renders markdown (MIT).
+
+## License
+
+No license has been chosen yet.
