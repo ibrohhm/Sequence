@@ -1,7 +1,13 @@
 import SwiftUI
+import Combine
 import AppKit
 import StudioCore
 import UniformTypeIdentifiers
+
+extension Notification.Name {
+    /// Posted by Settings so every window re-resolves Java and Graphviz.
+    static let toolPathsChanged = Notification.Name("SequenceToolPathsChanged")
+}
 
 enum ViewMode: String { case view, edit, editPreview }
 
@@ -39,11 +45,21 @@ enum ViewMode: String { case view, edit, editPreview }
             ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Resources/plantuml.jar")
     }
 
-    init() {
+    private static var restoredOnce = false
+    private var toolObserver: AnyCancellable?
+
+    /// True for the first window only, so later windows start empty instead of repeating the last folder.
+    static func claimRestore() -> Bool {
+        defer { restoredOnce = true }
+        return !restoredOnce
+    }
+
+    init(restoreSession: Bool = true) {
+        toolObserver = NotificationCenter.default.publisher(for: .toolPathsChanged).sink { [weak self] _ in self?.resolveTools() }
         playgroundKind = defaults.string(forKey: "playgroundKind") == "markdown" ? .markdown : .diagram
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
         resolveTools()
-        if let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
+        if restoreSession, let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
             openRoot(URL(fileURLWithPath: path))
             if let file = defaults.string(forKey: "lastFile"), FileManager.default.fileExists(atPath: file) {
                 select(URL(fileURLWithPath: file))
@@ -269,6 +285,17 @@ enum ViewMode: String { case view, edit, editPreview }
             return
         }
         select(url)
+    }
+
+    /// Leaves the playground and returns to the file list with nothing open.
+    func closePlayground() {
+        guard inPlayground else { return }
+        if session?.isDirty == true { save() }
+        session = nil
+        selection = nil
+        markdownPreview = nil
+        lastSVG = nil
+        if let saved = modeBeforePlayground { mode = saved; modeBeforePlayground = nil }
     }
 
     /// Writes the playground text to a file the user picks, then opens it from the library.

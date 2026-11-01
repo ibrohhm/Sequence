@@ -1,26 +1,42 @@
 import SwiftUI
 
+/// One window: its own model, so each window can show a different folder.
+private struct WindowRoot: View {
+    @StateObject private var model = AppModel(restoreSession: AppModel.claimRestore())
+
+    var body: some View {
+        RootView()
+            .environmentObject(model)
+            .focusedSceneObject(model)
+    }
+}
+
+private struct SequenceCommands: Commands {
+    @FocusedObject private var model: AppModel?
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("Open Folder…") { model?.chooseRoot() }.keyboardShortcut("o").disabled(model == nil)
+            Divider()
+            Button("PlantUML Playground") { model?.openPlayground(kind: .diagram) }.keyboardShortcut("p", modifiers: [.command, .shift]).disabled(model == nil)
+            Button("Markdown Playground") { model?.openPlayground(kind: .markdown) }.keyboardShortcut("m", modifiers: [.command, .shift]).disabled(model == nil)
+        }
+        CommandGroup(replacing: .saveItem) {
+            Button("Save") { model?.save() }.keyboardShortcut("s").disabled(model?.session == nil)
+            Divider()
+            Button("Export SVG…") { model?.exportSVG() }.disabled(model?.lastSVG == nil)
+            Button("Export PNG…") { model?.exportPNG() }.disabled(model?.session == nil)
+        }
+    }
+}
+
 @main
 struct SequenceApp: App {
-    @StateObject private var model = AppModel()
-
     init() { NSApplication.shared.setActivationPolicy(.regular) }
 
     var body: some Scene {
-        WindowGroup {
-            RootView().environmentObject(model)
-        }
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("Open Folder…") { model.chooseRoot() }.keyboardShortcut("o")
-            }
-            CommandGroup(replacing: .saveItem) {
-                Button("Save") { model.save() }.keyboardShortcut("s").disabled(model.session == nil)
-                Divider()
-                Button("Export SVG…") { model.exportSVG() }.disabled(model.lastSVG == nil)
-                Button("Export PNG…") { model.exportPNG() }.disabled(model.session == nil)
-            }
-        }
-        Settings { SettingsView().environmentObject(model).preferredColorScheme(model.theme.colorScheme) }
+        WindowGroup { WindowRoot() }
+            .commands { SequenceCommands() }
+        Settings { SettingsView() }
     }
 }

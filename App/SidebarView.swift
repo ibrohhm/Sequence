@@ -58,6 +58,7 @@ struct SidebarView: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Spacer(minLength: 0)
             IconButton(symbol: "magnifyingglass", help: "Search files") { toggleSearch() }
+            PlaygroundMenu()
             IconButton(symbol: model.theme == .dark ? "sun.max" : "moon", help: model.theme == .dark ? "Switch to light theme" : "Switch to dark theme") {
                 model.theme = model.theme.toggled
             }
@@ -87,7 +88,6 @@ struct SidebarView: View {
     @ViewBuilder private var list: some View {
         VStack(alignment: .leading, spacing: 2) {
             if query.isEmpty {
-                ActionRow(title: "Playground", symbol: "square.and.pencil", selected: model.inPlayground) { model.openPlayground() }
                 ActionRow(title: "New file", symbol: "plus") { promptText = ""; prompt = .newFile(nil) }
                 ForEach(model.tree.filter { !$0.isDirectory }) { TreeRow(node: $0, depth: 0) { menu(for: $0) } }
                 ForEach(model.tree.filter(\.isDirectory)) { section($0) }
@@ -206,6 +206,27 @@ private struct ActionRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(perform: action)
+    }
+}
+
+/// Header icon that opens one of the two scratch playgrounds.
+private struct PlaygroundMenu: View {
+    @EnvironmentObject var model: AppModel
+    @State private var hovering = false
+
+    var body: some View {
+        Menu {
+            Button("PlantUML Playground") { model.openPlayground(kind: .diagram) }
+            Button("Markdown Playground") { model.openPlayground(kind: .markdown) }
+        } label: {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 13)).foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .onHover { hovering = $0 }
+        .help("Open a playground")
     }
 }
 

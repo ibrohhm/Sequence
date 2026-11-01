@@ -12,11 +12,11 @@ struct RootView: View {
                 VStack(spacing: 12) {
                     Text("Choose a folder of PlantUML and markdown files").font(.title2)
                     Button("Open Folder…") { model.chooseRoot() }
-                    Button("Open Playground") { model.openPlayground() }
+                    PlaygroundChoices().frame(width: 260).padding(.top, 8)
                 }
             } else {
                 HSplitView {
-                    if model.showSidebar {
+                    if model.showSidebar && !model.inPlayground {
                         SidebarView()
                             .frame(minWidth: 180, idealWidth: 240, maxWidth: 400)
                             .background(model.theme.sidebarBackground.ignoresSafeArea())
@@ -24,10 +24,12 @@ struct RootView: View {
                     detail.frame(minWidth: 500)
                 }
                 .toolbar {
-                    ToolbarItem(placement: .navigation) {
-                        Button { model.showSidebar.toggle() } label: { Image(systemName: "sidebar.left") }
-                            .help("Show or hide sidebar")
-                            .keyboardShortcut("s", modifiers: [.command, .control])
+                    if !model.inPlayground {
+                        ToolbarItem(placement: .navigation) {
+                            Button { model.showSidebar.toggle() } label: { Image(systemName: "sidebar.left") }
+                                .help("Show or hide sidebar")
+                                .keyboardShortcut("s", modifiers: [.command, .control])
+                        }
                     }
                 }
             }
@@ -56,12 +58,58 @@ struct RootView: View {
             if let session = model.session {
                 MainView(session: session).id(session.url)
             } else {
-                Text("Select a file").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 20) {
+                    Text("Select a file").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)
+                    PlaygroundChoices().frame(width: 260)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
     }
 
     private func banner(_ text: String) -> some View {
         Text(text).font(.callout).frame(maxWidth: .infinity, alignment: .leading).padding(8).background(Color.yellow.opacity(0.2))
+    }
+}
+
+/// The two playground entry rows, styled like sidebar rows.
+private struct PlaygroundChoices: View {
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Or start a playground").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                .padding(.horizontal, 8).padding(.bottom, 4)
+            row("PlantUML", symbol: "square.and.pencil", shortcut: "⌘⇧P") { model.openPlayground(kind: .diagram) }
+            row("Markdown", symbol: "doc.text", shortcut: "⌘⇧M") { model.openPlayground(kind: .markdown) }
+        }
+    }
+
+    private func row(_ title: String, symbol: String, shortcut: String, action: @escaping () -> Void) -> some View {
+        PlaygroundRow(title: title, symbol: symbol, shortcut: shortcut, action: action)
+    }
+}
+
+private struct PlaygroundRow: View {
+    @EnvironmentObject var model: AppModel
+    let title: String
+    let symbol: String
+    let shortcut: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol).foregroundStyle(.secondary).frame(width: 14)
+            Text(title)
+            Spacer(minLength: 0)
+            Text(shortcut).font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .font(.system(size: 13))
+        .padding(.vertical, 6).padding(.horizontal, 8)
+        .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture(perform: action)
     }
 }

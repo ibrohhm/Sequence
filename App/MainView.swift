@@ -10,10 +10,13 @@ struct MainView: View {
             Rectangle().fill(Color(nsColor: .separatorColor)).frame(height: 0.5)
             content
         }
-            .navigationTitle(model.inPlayground ? "Playground" : session.url.lastPathComponent + (session.isDirty ? " •" : ""))
+            .navigationTitle(model.inPlayground ? (isMarkdown ? "Markdown Playground" : "PlantUML Playground") : session.url.lastPathComponent + (session.isDirty ? " •" : ""))
             .toolbar {
                 if model.inPlayground {
-                    ToolbarItem { languagePicker }
+                    ToolbarItem(placement: .navigation) {
+                        Button { model.closePlayground() } label: { Label("Back to files", systemImage: "chevron.left") }
+                            .help("Close playground and go back")
+                    }
                     ToolbarItem { Button("Save to folder…") { model.saveCopyOfPlayground() } }
                 } else {
                     ToolbarItem { modePicker }
@@ -34,14 +37,6 @@ struct MainView: View {
         case .editPreview:
             if isMarkdown { MarkdownEditPreview(session: session) } else { PlaygroundView(session: session) }
         }
-    }
-
-    private var languagePicker: some View {
-        Picker("Language", selection: Binding(get: { model.playgroundKind }, set: { model.openPlayground(kind: $0) })) {
-            Text("PlantUML").tag(DocumentKind.diagram)
-            Text("Markdown").tag(DocumentKind.markdown)
-        }
-        .pickerStyle(.segmented)
     }
 
     private var modePicker: some View {
