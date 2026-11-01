@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-/// A web view whose right-click menu offers Copy Image when the click lands on a diagram.
+/// A web view whose right-click menu holds only Copy Image, and only when the click lands on a diagram.
 final class DiagramWebView: WKWebView {
     private var hitRect: CGRect?
 
@@ -26,11 +26,11 @@ final class DiagramWebView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
+        menu.removeAllItems()
         guard hitRect != nil else { return }
         let copyImage = NSMenuItem(title: "Copy Image", action: #selector(copyImage), keyEquivalent: "")
         copyImage.target = self
-        menu.insertItem(copyImage, at: 0)
-        menu.insertItem(.separator(), at: 1)
+        menu.addItem(copyImage)
     }
 
     @objc private func copyImage() {
