@@ -15,6 +15,7 @@ enum Theme: String {
     var comment: NSColor { self == .dark ? NSColor(hex: 0x6A9955) : .systemGray }
     var arrow: NSColor { self == .dark ? NSColor(hex: 0x569CD6) : .systemOrange }
 
+    var sidebarBackground: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x181818)) : Color(nsColor: .windowBackgroundColor) }
     var selectedRow: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x04395E)) : Color.primary.opacity(0.16) }
     var hoverRow: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x2A2D2E)) : Color.primary.opacity(0.08) }
 

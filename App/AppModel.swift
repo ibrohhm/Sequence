@@ -10,6 +10,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var selection: URL?
     @Published var session: DocumentSession?
     @Published var mode: ViewMode = .view
+    @Published var showSidebar = true
     @Published var theme: Theme = .light {
         didSet { defaults.set(theme.rawValue, forKey: "theme") }
     }

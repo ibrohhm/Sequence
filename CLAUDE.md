@@ -6,8 +6,8 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 
 - `Sources/StudioCore`: UI-free engine (renderer, scanner, watcher, file ops, `DocumentSession`, `MarkdownPreparer`).
 - `App/`: SwiftUI + AppKit views, `AppModel` (all app state).
-  - `RootView`: window root. Picks setup, choose-folder or the sidebar + detail split, and holds app-wide alerts.
-  - `SidebarView`: custom file tree.
+  - `RootView`: window root. Picks setup, choose-folder or the sidebar + detail `HSplitView`, and holds app-wide alerts.
+  - `SidebarView`: header (folder menu, search, theme), "New file" row, top-level folders as sections, nested folders collapsible.
   - `MainView`: detail pane for the open file. Owns the title, mode picker, Save button and the mode switch (view / edit / editPreview).
 - `App/Resources`: `plantuml.jar` (bundled), `marked.min.js` (markdown parser), `PLANTUML_VERSION`.
 - `Tests/StudioCoreTests`: Swift Testing suites.
@@ -28,7 +28,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 - Markdown preview escapes raw HTML. Keep it that way; the page can read local files.
 - Supported files: `.puml .plantuml .pu .wsd` (diagrams), `.md` (markdown). `.mdx` is out of scope.
 - Theme (light/dark) is `AppModel.theme`, saved in UserDefaults, overrides macOS via `.preferredColorScheme`. All theme colors (editor, sidebar rows, syntax, web CSS variables keyed by `data-theme`) live in `App/Theme.swift`. Dark follows VS Code "Dark Modern". Do not hardcode hex in `SVGView` or `MarkdownView`.
-- Sidebar is a custom tree, not `List`, so hover and selection styling stay controllable. Do not switch back.
+- Layout is a plain `HSplitView`, not `NavigationSplitView`: on macOS 26 the latter draws the sidebar as a floating glass panel that cannot be turned off. Sidebar is a custom tree, not `List`, so hover and selection styling stay controllable. Do not switch back.
 - Can't screenshot the UI here. Say when UI changes are unverified.
 - After every change, update `README.md` and this file if features, layout, commands or rules changed. Commit them with the change.
 

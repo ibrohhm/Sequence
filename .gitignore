@@ -3,3 +3,5 @@
 build/
 .superpowers/
 .DS_Store
+
+.vscode/

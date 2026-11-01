@@ -14,10 +14,20 @@ struct RootView: View {
                     Button("Open Folder…") { model.chooseRoot() }
                 }
             } else {
-                NavigationSplitView {
-                    SidebarView().navigationSplitViewColumnWidth(min: 180, ideal: 240)
-                } detail: {
-                    detail
+                HSplitView {
+                    if model.showSidebar {
+                        SidebarView()
+                            .frame(minWidth: 180, idealWidth: 240, maxWidth: 400)
+                            .background(model.theme.sidebarBackground.ignoresSafeArea())
+                    }
+                    detail.frame(minWidth: 500)
+                }
+                .toolbar {
+                    ToolbarItem(placement: .navigation) {
+                        Button { model.showSidebar.toggle() } label: { Image(systemName: "sidebar.left") }
+                            .help("Show or hide sidebar")
+                            .keyboardShortcut("s", modifiers: [.command, .control])
+                    }
                 }
             }
         }
