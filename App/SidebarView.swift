@@ -97,13 +97,7 @@ struct SidebarView: View {
     }
 
     private func section(_ node: FileNode) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(node.name)
-                .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
-                .padding(.leading, 8).padding(.top, 14).padding(.bottom, 2)
-                .contextMenu { menu(for: node) }
-            ForEach(node.children ?? []) { TreeRow(node: $0, depth: 0) { menu(for: $0) } }
-        }
+        SectionView(node: node) { menu(for: $0) }
     }
 
     private var matches: [FileNode] {
@@ -127,6 +121,40 @@ struct SidebarView: View {
         case .newFile(let folder): model.createFile(named: promptText, in: folder)
         case .newFolder(let folder): model.createFolder(named: promptText, in: folder)
         case .rename(let url): model.rename(url, to: promptText)
+        }
+    }
+}
+
+/// A top-level folder: a collapsible header over its children.
+private struct SectionView<Menu: View>: View {
+    let node: FileNode
+    @ViewBuilder let menu: (FileNode) -> Menu
+    @State private var expanded = true
+    @State private var hovering = false
+    @EnvironmentObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+                    .frame(width: 10)
+                Text(node.name).lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            .padding(.leading, 8).padding(.vertical, 3).padding(.trailing, 8)
+            .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
+            .contentShape(Rectangle())
+            .onHover { hovering = $0 }
+            .onTapGesture { withAnimation(.easeOut(duration: 0.12)) { expanded.toggle() } }
+            .contextMenu { menu(node) }
+            .padding(.top, 12)
+
+            if expanded {
+                ForEach(node.children ?? []) { TreeRow(node: $0, depth: 0) { menu($0) } }
+            }
         }
     }
 }
