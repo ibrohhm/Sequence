@@ -22,6 +22,7 @@ struct RootView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 560)
+        .preferredColorScheme(model.theme.colorScheme)
         .alert("Unsaved changes", isPresented: Binding(get: { model.pendingSelection != nil }, set: { if !$0 { model.cancelPendingSelection() } })) {
             Button("Save") { model.resolvePendingSelection(save: true) }
             Button("Discard", role: .destructive) { model.resolvePendingSelection(save: false) }

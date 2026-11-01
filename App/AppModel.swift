@@ -10,6 +10,9 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var selection: URL?
     @Published var session: DocumentSession?
     @Published var mode: ViewMode = .view
+    @Published var theme: Theme = .light {
+        didSet { defaults.set(theme.rawValue, forKey: "theme") }
+    }
     @Published var lastSVG: Data?
     @Published var markdownPreview: MarkdownPreview?
     @Published var renderError: String?
@@ -32,6 +35,7 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     init() {
+        theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
         resolveTools()
         if let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
             openRoot(URL(fileURLWithPath: path))

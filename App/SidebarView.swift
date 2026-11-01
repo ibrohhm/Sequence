@@ -35,6 +35,7 @@ struct SidebarView: View {
                 Button { promptText = ""; prompt = .newFile(nil) } label: { Image(systemName: "doc.badge.plus") }.help("New file")
                 Button { promptText = ""; prompt = .newFolder(nil) } label: { Image(systemName: "folder.badge.plus") }.help("New folder")
                 Spacer()
+                Button { model.theme = model.theme.toggled } label: { Image(systemName: model.theme == .dark ? "sun.max" : "moon") }.help(model.theme == .dark ? "Switch to light theme" : "Switch to dark theme")
                 Button { model.chooseRoot() } label: { Image(systemName: "folder") }.help("Change root folder")
             }
             .buttonStyle(.borderless).padding(8)
@@ -96,7 +97,7 @@ private struct TreeRow<Menu: View>: View {
             .padding(.vertical, 5)
             .padding(.leading, 8 + CGFloat(depth) * 14)
             .padding(.trailing, 8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Color.primary.opacity(0.16) : (hovering ? Color.primary.opacity(0.08) : Color.clear)))
+                        .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? model.theme.selectedRow : (hovering ? model.theme.hoverRow : Color.clear)))
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
             .onTapGesture {

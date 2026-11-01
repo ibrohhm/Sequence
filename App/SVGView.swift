@@ -3,6 +3,7 @@ import WebKit
 
 struct SVGView: NSViewRepresentable {
     let svg: Data
+    let theme: Theme
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -14,16 +15,18 @@ struct SVGView: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
-        guard context.coordinator.last != svg else { return }
+        guard context.coordinator.last != svg || context.coordinator.lastTheme != theme else { return }
         context.coordinator.last = svg
+        context.coordinator.lastTheme = theme
         let body = String(decoding: svg, as: UTF8.self)
         let html = """
-        <html><body style="margin:0;padding:16px;box-sizing:border-box;min-height:100vh;display:flex;background:#fff">
-        <div style="margin:auto">\(body)</div>
+        <html data-theme="\(theme.rawValue)"><head><style>\(Theme.cssVariables)</style></head>
+        <body style="margin:0;padding:16px;box-sizing:border-box;min-height:100vh;display:flex;background:var(--bg)">
+        <div style="margin:auto;background:var(--diagram-bg);border-radius:6px">\(body)</div>
         </body></html>
         """
         view.loadHTMLString(html, baseURL: nil)
     }
 
-    final class Coordinator { var last: Data? }
+    final class Coordinator { var last: Data?; var lastTheme: Theme? }
 }

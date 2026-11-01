@@ -15,6 +15,7 @@ struct MarkdownPreview: Encodable, Equatable {
 struct MarkdownView: NSViewRepresentable {
     let preview: MarkdownPreview?
     let baseDirectory: URL
+    let theme: Theme
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -23,28 +24,30 @@ struct MarkdownView: NSViewRepresentable {
         view.navigationDelegate = context.coordinator
         view.setValue(false, forKey: "drawsBackground")
         context.coordinator.webView = view
+        context.coordinator.theme = theme
         load(view)
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
+        context.coordinator.apply(theme)
         guard let preview, let data = try? JSONEncoder().encode(preview), let json = String(data: data, encoding: .utf8) else { return }
         context.coordinator.show(json)
     }
 
     private func load(_ view: WKWebView) {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("plantuml-studio-\(UUID().uuidString).html")
-        guard (try? Self.page(base: baseDirectory).write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
+        guard (try? Self.page(base: baseDirectory, theme: theme).write(to: file, atomically: true, encoding: .utf8)) != nil else { return }
         view.loadFileURL(file, allowingReadAccessTo: URL(fileURLWithPath: "/"))
     }
 
-    private static func page(base: URL) -> String {
+    private static func page(base: URL, theme: Theme) -> String {
         let baseHref = base.absoluteString.hasSuffix("/") ? base.absoluteString : base.absoluteString + "/"
         let markedURL = Bundle.main.url(forResource: "marked.min", withExtension: "js")
             ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Resources/marked.min.js")
         let marked = (try? String(contentsOf: markedURL, encoding: .utf8)) ?? ""
         return """
-        <!doctype html><html><head><meta charset="utf-8"><base href="\(baseHref)">
+        <!doctype html><html data-theme="\(theme.rawValue)"><head><meta charset="utf-8"><base href="\(baseHref)">
         <style>\(css)</style><script>\(marked)</script></head>
         <body><article id="c"></article>
         <script>
@@ -65,9 +68,7 @@ struct MarkdownView: NSViewRepresentable {
         """
     }
 
-    private static let css = """
-    :root { color-scheme: light dark; --fg:#1f2328; --bg:#fff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; }
-    @media (prefers-color-scheme: dark) { :root { --fg:#e6edf3; --bg:#0d1117; --muted:#9198a1; --line:#3d444d; --code:#151b23; --link:#4493f8; } }
+    private static let css = Theme.cssVariables + """
     body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 -apple-system, BlinkMacSystemFont, sans-serif; }
     article { max-width:860px; margin:0 auto; padding:24px 32px 64px; }
     h1,h2 { padding-bottom:.3em; border-bottom:1px solid var(--line); }
@@ -82,7 +83,7 @@ struct MarkdownView: NSViewRepresentable {
     tr:nth-child(2n) { background:var(--code); }
     img { max-width:100%; }
     hr { border:0; border-top:1px solid var(--line); }
-    .diagram { text-align:center; background:#fff; border:1px solid var(--line); border-radius:6px; padding:12px; margin:1em 0; overflow:auto; }
+    .diagram { text-align:center; background:var(--diagram-bg); border:1px solid var(--line); border-radius:6px; padding:12px; margin:1em 0; overflow:auto; }
     .diagram svg { max-width:100%; height:auto; }
     .error { background:rgba(207,34,46,.12); color:inherit; white-space:pre-wrap; }
     .pending { color:var(--muted); }
@@ -92,6 +93,13 @@ struct MarkdownView: NSViewRepresentable {
         weak var webView: WKWebView?
         private var loaded = false
         private var latest: String?
+        var theme: Theme = .light
+
+        func apply(_ newTheme: Theme) {
+            theme = newTheme
+            guard loaded else { return }
+            webView?.evaluateJavaScript("document.documentElement.dataset.theme='\(newTheme.rawValue)'")
+        }
 
         func show(_ json: String) {
             latest = json
@@ -101,6 +109,7 @@ struct MarkdownView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             loaded = true
+            apply(theme)
             if let latest { webView.evaluateJavaScript("window.renderDoc(\(latest))") }
         }
 

@@ -8,6 +8,7 @@ Mac app to browse, view and edit PlantUML diagrams and markdown files from a loc
 - Click a file to see it rendered. Diagrams and markdown share three modes: View (rendered), Edit (code only) and Edit with preview (code on the left, live render on the right).
 - Markdown files open in View mode.
 - ```` ```plantuml ````, ```` ```puml ```` and ```` ```uml ```` blocks in markdown render as diagrams inline.
+- Light and Dark themes, switched with the sun/moon button in the sidebar. The choice overrides macOS and is remembered. Dark follows the VS Code "Dark Modern" palette. Diagrams sit on a white card in Dark.
 - Export a diagram as SVG or PNG.
 - Asks before discarding unsaved changes, and when a file changes on disk while you have edits.
 

@@ -21,6 +21,6 @@ struct PlantUMLStudioApp: App {
                 Button("Export PNG…") { model.exportPNG() }.disabled(model.session == nil)
             }
         }
-        Settings { SettingsView().environmentObject(model) }
+        Settings { SettingsView().environmentObject(model).preferredColorScheme(model.theme.colorScheme) }
     }
 }

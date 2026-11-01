@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct CodeEditor: NSViewRepresentable {
+    @EnvironmentObject var model: AppModel
     @Binding var text: String
     var highlightsPlantUML = true
 
@@ -18,7 +19,8 @@ struct CodeEditor: NSViewRepresentable {
         textView.allowsUndo = true
         textView.delegate = context.coordinator
         textView.string = text
-        Coordinator.highlight(textView, enabled: highlightsPlantUML)
+        applyTheme(to: scroll, textView)
+        Coordinator.highlight(textView, enabled: highlightsPlantUML, theme: model.theme)
         scroll.verticalRulerView = LineNumberRuler(textView: textView)
         scroll.hasVerticalRuler = true
         scroll.rulersVisible = true
@@ -28,32 +30,43 @@ struct CodeEditor: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) {
         let textView = scroll.documentView as! NSTextView
         context.coordinator.parent = self
-        if textView.string != text {
-            textView.string = text
-            Coordinator.highlight(textView, enabled: highlightsPlantUML)
-        }
+        let themeChanged = context.coordinator.theme != model.theme
+        context.coordinator.theme = model.theme
+        if themeChanged { applyTheme(to: scroll, textView) }
+        let textChanged = textView.string != text
+        if textChanged { textView.string = text }
+        if textChanged || themeChanged { Coordinator.highlight(textView, enabled: highlightsPlantUML, theme: model.theme) }
+    }
+
+    private func applyTheme(to scroll: NSScrollView, _ textView: NSTextView) {
+        let theme = model.theme
+        scroll.backgroundColor = theme.editorBackground
+        textView.backgroundColor = theme.editorBackground
+        textView.textColor = theme.editorText
+        textView.insertionPointColor = theme.caret
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CodeEditor
+        var theme: Theme = .light
         init(_ parent: CodeEditor) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
-            Self.highlight(textView, enabled: parent.highlightsPlantUML)
+            Self.highlight(textView, enabled: parent.highlightsPlantUML, theme: parent.model.theme)
         }
 
-        static func highlight(_ textView: NSTextView, enabled: Bool) {
+        static func highlight(_ textView: NSTextView, enabled: Bool, theme: Theme) {
             guard enabled else { return }
             guard let storage = textView.textStorage else { return }
             let full = NSRange(location: 0, length: storage.length)
             storage.beginEditing()
-            storage.setAttributes([.font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular), .foregroundColor: NSColor.textColor], range: full)
+            storage.setAttributes([.font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular), .foregroundColor: theme.editorText], range: full)
             let rules: [(String, NSColor)] = [
-                ("^\\s*@(start|end)\\w*.*$", .systemPurple),
-                ("^\\s*'.*$", .systemGray),
-                ("[<>o]?[-.]+[>\\\\/]+|<[-.]+", .systemOrange),
+                ("^\\s*@(start|end)\\w*.*$", theme.directive),
+                ("^\\s*'.*$", theme.comment),
+                ("[<>o]?[-.]+[>\\\\/]+|<[-.]+", theme.arrow),
             ]
             for (pattern, color) in rules {
                 guard let regex = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) else { continue }

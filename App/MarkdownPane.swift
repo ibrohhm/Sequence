@@ -6,7 +6,7 @@ struct MarkdownPane: View {
     let url: URL
 
     var body: some View {
-        MarkdownView(preview: model.markdownPreview, baseDirectory: url.deletingLastPathComponent())
+        MarkdownView(preview: model.markdownPreview, baseDirectory: url.deletingLastPathComponent(), theme: model.theme)
     }
 }
 
