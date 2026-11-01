@@ -1,7 +1,7 @@
 import SwiftUI
 import StudioCore
 
-struct ContentView: View {
+struct RootView: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
@@ -41,7 +41,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             if let notice = model.notice { banner(notice) }
             if let session = model.session {
-                SessionDetail(session: session).id(session.url)
+                MainView(session: session).id(session.url)
             } else {
                 Text("Select a file").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -50,53 +50,5 @@ struct ContentView: View {
 
     private func banner(_ text: String) -> some View {
         Text(text).font(.callout).frame(maxWidth: .infinity, alignment: .leading).padding(8).background(Color.yellow.opacity(0.2))
-    }
-}
-
-struct SessionDetail: View {
-    @EnvironmentObject var model: AppModel
-    @ObservedObject var session: DocumentSession
-
-    var body: some View {
-        content
-            .navigationTitle(session.url.lastPathComponent + (session.isDirty ? " •" : ""))
-            .toolbar {
-                ToolbarItem { modePicker }
-                ToolbarItem { Button("Save") { model.save() }.disabled(!session.isDirty) }
-            }
-            .onChange(of: model.mode) { _, _ in model.scheduleRender(debounce: false) }
-    }
-
-    private var isMarkdown: Bool { DocumentKind(url: session.url) == .markdown }
-
-    @ViewBuilder private var content: some View {
-        if isMarkdown {
-            switch model.mode {
-            case .view: MarkdownPane(url: session.url)
-            case .edit: CodeEditor(text: $session.text, highlightsPlantUML: false)
-            case .editPreview: MarkdownEditPreview(session: session)
-            }
-        } else if model.mode == .view {
-            DiagramPane()
-        } else {
-            PlaygroundView(session: session)
-        }
-    }
-
-    @ViewBuilder private var modePicker: some View {
-        if isMarkdown {
-            Picker("Mode", selection: $model.mode) {
-                Text("View").tag(ViewMode.view)
-                Text("Edit").tag(ViewMode.edit)
-                Text("Edit with preview").tag(ViewMode.editPreview)
-            }
-            .pickerStyle(.segmented)
-        } else {
-            Picker("Mode", selection: Binding(get: { model.mode == .view ? ViewMode.view : .edit }, set: { model.mode = $0 })) {
-                Text("View").tag(ViewMode.view)
-                Text("Edit").tag(ViewMode.edit)
-            }
-            .pickerStyle(.segmented)
-        }
     }
 }

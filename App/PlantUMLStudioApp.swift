@@ -8,7 +8,7 @@ struct PlantUMLStudioApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView().environmentObject(model)
+            RootView().environmentObject(model)
         }
         .commands {
             CommandGroup(replacing: .newItem) {
