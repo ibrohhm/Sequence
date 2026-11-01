@@ -28,6 +28,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 - Markdown preview escapes raw HTML. Keep it that way; the page can read local files.
 - Supported files: `.puml .plantuml .pu .wsd` (diagrams), `.md` (markdown). `.mdx` is out of scope.
 - Theme (light/dark) is `AppModel.theme`, saved in UserDefaults, overrides macOS via `.preferredColorScheme`. All theme colors (editor, sidebar rows, syntax, web CSS variables keyed by `data-theme`) live in `App/Theme.swift`. Dark follows VS Code "Dark Modern". Do not hardcode hex in `SVGView` or `MarkdownView`.
+- `WindowConfigurator` removes the full-size content view so content never slides under the toolbar when the window resizes or the sidebar toggles.
 - Layout is a plain `HSplitView`, not `NavigationSplitView`: on macOS 26 the latter draws the sidebar as a floating glass panel that cannot be turned off. Sidebar is a custom tree, not `List`, so hover and selection styling stay controllable. Do not switch back.
 - Can't screenshot the UI here. Say when UI changes are unverified.
 - After every change, update `README.md` and this file if features, layout, commands or rules changed. Commit them with the change.

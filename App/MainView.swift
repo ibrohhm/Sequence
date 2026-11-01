@@ -33,9 +33,9 @@ struct MainView: View {
 
     private var modePicker: some View {
         Picker("Mode", selection: $model.mode) {
-            Text("View").tag(ViewMode.view)
-            Text("Edit").tag(ViewMode.edit)
-            Text("Edit with preview").tag(ViewMode.editPreview)
+            Label("View", systemImage: "eye").labelStyle(.iconOnly).help("View").tag(ViewMode.view)
+            Label("Edit", systemImage: "pencil").labelStyle(.iconOnly).help("Edit").tag(ViewMode.edit)
+            Label("Edit with preview", systemImage: "rectangle.split.2x1").labelStyle(.iconOnly).help("Edit with preview").tag(ViewMode.editPreview)
         }
         .pickerStyle(.segmented)
     }

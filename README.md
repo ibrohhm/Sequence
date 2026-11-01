@@ -5,7 +5,7 @@ Mac app to browse, view and edit PlantUML diagrams and markdown files from a loc
 ## Features
 
 - Sidebar for the root folder. The header shows the folder name with a menu (new file, new folder, change folder), a search that filters files by name, and the theme button. Top-level folders are sections. The sidebar button at the top left of the toolbar (⌘⌃S) shows or hides it. Create, rename and delete (to Trash) from the right-click menu. The tree updates when files change on disk.
-- Click a file to see it rendered. Diagrams and markdown share three modes: View (rendered), Edit (code only) and Edit with preview (code on the left, live render on the right).
+- Click a file to see it rendered. Diagrams and markdown share three modes, picked with the icon switch in the toolbar: View (eye, rendered), Edit (pencil, code only) and Edit with preview (split pane, code on the left, live render on the right).
 - Markdown files open in View mode.
 - ```` ```plantuml ````, ```` ```puml ```` and ```` ```uml ```` blocks in markdown render as diagrams inline.
 - Light and Dark themes, switched with the sun/moon button in the sidebar header. The choice overrides macOS and is remembered. Dark follows the VS Code "Dark Modern" palette. Diagrams sit on a white card in Dark.
