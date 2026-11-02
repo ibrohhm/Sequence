@@ -9,7 +9,7 @@ struct SVGView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> WKWebView {
         let view = DiagramWebView.make()
-        view.allowsMagnification = true
+        view.zoomsOnPinch = true
         view.setValue(false, forKey: "drawsBackground")
         return view
     }
