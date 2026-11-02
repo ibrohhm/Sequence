@@ -112,8 +112,16 @@ struct SidebarView: View {
             Button("New File…") { promptText = ""; prompt = .newFile(node.id) }
             Button("New Folder…") { promptText = ""; prompt = .newFolder(node.id) }
         }
+        Button("Copy Name") { copy(node.name) }
+        Button("Copy Path") { copy(node.id.path) }
+        Divider()
         Button("Rename…") { promptText = node.name; prompt = .rename(node.id) }
         Button("Delete…", role: .destructive) { deleteTarget = node.id }
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     private func run(_ p: Prompt) {
