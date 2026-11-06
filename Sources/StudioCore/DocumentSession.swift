@@ -6,7 +6,7 @@ public enum ExternalChange: Equatable { case none, reloaded, conflict, fileMissi
 @MainActor public final class DocumentSession: ObservableObject {
     @Published public var text: String
     public private(set) var url: URL
-    private var savedText: String
+    @Published private var savedText: String
     private var acknowledgedDisk: String?
 
     public var isDirty: Bool { text != savedText }

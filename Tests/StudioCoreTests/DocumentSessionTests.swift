@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Combine
 @testable import StudioCore
 
 private func tempFile(_ content: String, name: String = "doc.puml") throws -> URL {
@@ -20,6 +21,20 @@ private func tempFile(_ content: String, name: String = "doc.puml") throws -> UR
         try session.save()
         #expect(!session.isDirty)
         #expect(try String(contentsOf: url, encoding: .utf8) == "b")
+    }
+
+    @Test func saveAndReloadNotifyObserversSoDirtyMarkersRefresh() throws {
+        let session = try DocumentSession(url: try tempFile("a"))
+        var changes = 0
+        let subscription = session.objectWillChange.sink { changes += 1 }
+        session.text = "b"
+        let afterEdit = changes
+        try session.save()
+        #expect(changes > afterEdit)
+        let afterSave = changes
+        try session.reloadFromDisk()
+        #expect(changes > afterSave)
+        subscription.cancel()
     }
 
     @Test func revertingTextToSavedContentIsNotDirty() throws {
