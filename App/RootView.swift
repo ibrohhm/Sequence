@@ -16,8 +16,14 @@ struct RootView: View {
                 }
             } else {
                 HStack(spacing: 0) {
-                    IconRail()
-                    panel
+                    IconRail().zIndex(1)
+                    HStack(spacing: 8) {
+                        if model.showSidebar && !model.inPlayground {
+                            SidebarView().frame(width: 236).panel(model.theme, fill: model.theme.sidebarBackground)
+                        }
+                        detail.panel(model.theme, fill: model.theme.panelBackground)
+                    }
+                    .padding(.trailing, 8).padding(.vertical, 8)
                 }
             }
         }
@@ -40,25 +46,9 @@ struct RootView: View {
         }
     }
 
-    private var panel: some View {
-        HSplitView {
-            if model.showSidebar && !model.inPlayground {
-                SidebarView()
-                    .frame(minWidth: 180, idealWidth: 240, maxWidth: 400)
-                    .background(model.theme.sidebarBackground)
-            }
-            VStack(spacing: 0) {
-                TopBar()
-                Rectangle().fill(model.theme.border).frame(height: 1)
-                detail
-            }
-            .frame(minWidth: 500)
-            .background(model.theme.panelBackground)
-        }
-    }
-
     private var detail: some View {
         VStack(spacing: 0) {
+            if let session = model.session { PageHeader(session: session) }
             if let notice = model.notice { banner(notice) }
             if let session = model.session {
                 MainView(session: session).id(session.url)
@@ -116,5 +106,14 @@ private struct PlaygroundRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(perform: action)
+    }
+}
+
+private extension View {
+    /// A rounded, bordered panel sitting on the window frame.
+    func panel(_ theme: Theme, fill: Color) -> some View {
+        background(fill)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.border))
     }
 }

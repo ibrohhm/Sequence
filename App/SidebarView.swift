@@ -207,8 +207,13 @@ private struct TreeRow<Menu: View>: View {
             .contextMenu { menu(node) }
 
             if expanded, let children = node.children {
-                ForEach(children) { child in
-                    TreeRow(node: child, depth: depth + 1, menu: menu)
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(children) { child in
+                        TreeRow(node: child, depth: depth + 1, menu: menu)
+                    }
+                }
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(model.theme.border).frame(width: 1).padding(.leading, 14 + CGFloat(depth) * 14)
                 }
             }
         }
