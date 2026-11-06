@@ -24,6 +24,10 @@ private struct SequenceCommands: Commands {
         CommandGroup(replacing: .textEditing) {
             Button("Find in File") { model?.focusFind() }.keyboardShortcut("f").disabled(model?.session == nil)
         }
+        CommandMenu("Format") {
+            Button("Bold") { model?.format(.bold) }.keyboardShortcut("b").disabled(!(model?.canFormatMarkdown ?? false))
+            Button("Italic") { model?.format(.italic) }.keyboardShortcut("i").disabled(!(model?.canFormatMarkdown ?? false))
+        }
         CommandGroup(replacing: .saveItem) {
             Button("Save") { model?.save() }.keyboardShortcut("s").disabled(model?.session == nil)
             Divider()

@@ -20,7 +20,7 @@ struct CodeEditor: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.allowsUndo = true
         textView.delegate = context.coordinator
-        context.coordinator.listen(to: textView, model.findRequests)
+        context.coordinator.listen(to: textView, finds: model.findRequests, formats: model.formatRequests)
         textView.string = text
         applyTheme(to: scroll, textView)
         Coordinator.highlight(textView, enabled: highlightsPlantUML, theme: model.theme)
@@ -53,9 +53,18 @@ struct CodeEditor: NSViewRepresentable {
         var parent: CodeEditor
         var theme: Theme = .light
         private var finds: AnyCancellable?
+        private var formats: AnyCancellable?
         init(_ parent: CodeEditor) { self.parent = parent }
 
-        func listen(to textView: NSTextView, _ requests: PassthroughSubject<FindRequest, Never>) {
+        func listen(to textView: NSTextView, finds requests: PassthroughSubject<FindRequest, Never>, formats formatRequests: PassthroughSubject<MarkdownFormat, Never>) {
+            formats = formatRequests.sink { [weak self, weak textView] format in
+                guard let self, let textView, !self.parent.highlightsPlantUML else { return }
+                let edit = MarkdownFormatter.toggle(format, in: textView.string, selection: textView.selectedRange())
+                guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
+                textView.replaceCharacters(in: edit.range, with: edit.replacement)
+                textView.didChangeText()
+                textView.setSelectedRange(edit.selection)
+            }
             finds = requests.sink { [weak textView] request in
                 guard let textView else { return }
                 let selection = textView.selectedRange()

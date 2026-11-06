@@ -26,6 +26,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var aiError: String?
     @Published private(set) var aiUndoText: String?
     let findRequests = PassthroughSubject<FindRequest, Never>()
+    let formatRequests = PassthroughSubject<MarkdownFormat, Never>()
     @Published private(set) var playgroundKind: DocumentKind = .diagram
     private let playgroundDirectory = Playground.defaultDirectory()
     private var modeBeforePlayground: ViewMode?
@@ -170,6 +171,18 @@ enum ViewMode: String { case view, edit, editPreview }
         aiUndoText = nil
         if inPlayground { try? session.save() }
         scheduleRender(debounce: false)
+    }
+
+    /// True when a markdown file is open in a mode that shows the editor.
+    var canFormatMarkdown: Bool {
+        guard let session else { return false }
+        return DocumentKind(url: session.url) == .markdown && mode != .view
+    }
+
+    /// Asks the markdown editor to toggle bold or italic on its selection.
+    func format(_ format: MarkdownFormat) {
+        guard canFormatMarkdown else { return }
+        formatRequests.send(format)
     }
 
     func focusFind() { findFocusTick += 1 }

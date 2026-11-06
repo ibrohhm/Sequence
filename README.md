@@ -11,6 +11,7 @@ Keep your flows next to your RFCs, browse them in a sidebar, and edit with a liv
 - **Markdown with diagrams.** ` ```plantuml `, ` ```puml ` and ` ```uml ` fenced blocks render as diagrams inside the markdown preview. Frontmatter is hidden, and raw HTML is escaped.
 - **Live rendering.** PlantUML runs in one long-lived Java process, so previews update as you type.
 - **Playground.** Two scratch editors, **PlantUML Playground** and **Markdown Playground**, opened from the left strip, the File menu, or the empty state when no file is open, always in Edit with preview and with the sidebar hidden (the Files icon in the left strip returns), for trying a diagram or a markdown snippet without creating a file. Each has its own text, remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
+- **Markdown formatting.** Select text in a markdown file and press ⌘B for bold or ⌘I for italic; press again to remove it. Combining both gives bold italic.
 - **AI prompt.** Type a change in plain language at the bottom of the editor ("add a retry loop after the payment call") and Claude rewrites the open diagram or document. It needs the [Claude Code](https://claude.com/claude-code) CLI installed and signed in; the text of the open file is sent to Claude. **Undo** restores the text from before the change.
 - **Search and file operations.** Filter files by name, and create, rename or delete (to Trash) from the sidebar.
 - **Export and copy.** Save a diagram as SVG or PNG, or right-click any diagram, in the viewer or inside a markdown preview, and choose **Copy Image**.
@@ -52,6 +53,7 @@ On first launch, choose a folder. The app remembers it and the last file you ope
 | Save | ⌘S |
 | Show or hide sidebar | ⌘⌃S |
 | Find in file | ⌘F |
+| Bold, italic (markdown) | ⌘B, ⌘I |
 | About Sequence | ⌘, |
 
 Export SVG and PNG are in the File menu.
