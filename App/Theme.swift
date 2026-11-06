@@ -15,9 +15,14 @@ enum Theme: String {
     var comment: NSColor { self == .dark ? NSColor(hex: 0x6A9955) : .systemGray }
     var arrow: NSColor { self == .dark ? NSColor(hex: 0x569CD6) : .systemOrange }
 
-    var sidebarBackground: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x181818)) : Color(nsColor: .windowBackgroundColor) }
+    var frameNSColor: NSColor { self == .dark ? NSColor(hex: 0x141414) : NSColor(hex: 0xEFEFF1) }
+    var frameBackground: Color { Color(nsColor: frameNSColor) }
+    var panelBackground: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x1F1F1F)) : .white }
+    var sidebarBackground: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x181818)) : Color(nsColor: NSColor(hex: 0xFAFAFB)) }
     var selectedRow: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x04395E)) : Color.primary.opacity(0.16) }
-    var hoverRow: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x2A2D2E)) : Color.primary.opacity(0.08) }
+    var hoverRow: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x2A2D2E)) : Color.primary.opacity(0.06) }
+    var border: Color { self == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09) }
+    var accent: Color { Color(nsColor: NSColor(hex: 0xDB6510)) }
 
     static let cssVariables = """
     :root, :root[data-theme="light"] { color-scheme: light; --fg:#1f2328; --bg:#fff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --diagram-bg:#fff; }

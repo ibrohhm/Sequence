@@ -15,32 +15,16 @@ struct RootView: View {
                     PlaygroundChoices().frame(width: 260).padding(.top, 8)
                 }
             } else {
-                HSplitView {
-                    if model.showSidebar && !model.inPlayground {
-                        SidebarView()
-                            .frame(minWidth: 180, idealWidth: 240, maxWidth: 400)
-                            .background(model.theme.sidebarBackground.ignoresSafeArea())
-                    }
-                    detail.frame(minWidth: 500)
-                }
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { model.theme = model.theme.toggled } label: { Image(systemName: model.theme == .dark ? "sun.max" : "moon") }
-                            .help(model.theme == .dark ? "Switch to light theme" : "Switch to dark theme")
-                    }
-                    if !model.inPlayground {
-                        ToolbarItem(placement: .navigation) {
-                            Button { model.showSidebar.toggle() } label: { Image(systemName: "sidebar.left") }
-                                .help("Show or hide sidebar")
-                                .keyboardShortcut("s", modifiers: [.command, .control])
-                        }
-                    }
+                HStack(spacing: 0) {
+                    IconRail()
+                    panel
                 }
             }
         }
         .frame(minWidth: 900, minHeight: 560)
+        .background(model.theme.frameBackground)
         .preferredColorScheme(model.theme.colorScheme)
-        .background(WindowConfigurator())
+        .background(WindowConfigurator(theme: model.theme))
         .alert("Unsaved changes", isPresented: Binding(get: { model.pendingSelection != nil }, set: { if !$0 { model.cancelPendingSelection() } })) {
             Button("Save") { model.resolvePendingSelection(save: true) }
             Button("Discard", role: .destructive) { model.resolvePendingSelection(save: false) }
@@ -53,6 +37,23 @@ struct RootView: View {
             Button("Keep my edits", role: .cancel) { model.session?.keepMine() }
         } message: {
             Text("\(model.session?.url.lastPathComponent ?? "This file") changed outside the app and you have unsaved edits.")
+        }
+    }
+
+    private var panel: some View {
+        HSplitView {
+            if model.showSidebar && !model.inPlayground {
+                SidebarView()
+                    .frame(minWidth: 180, idealWidth: 240, maxWidth: 400)
+                    .background(model.theme.sidebarBackground)
+            }
+            VStack(spacing: 0) {
+                TopBar()
+                Rectangle().fill(model.theme.border).frame(height: 1)
+                detail
+            }
+            .frame(minWidth: 500)
+            .background(model.theme.panelBackground)
         }
     }
 

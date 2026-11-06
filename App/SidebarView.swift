@@ -21,7 +21,6 @@ struct SidebarView: View {
     @State private var promptText = ""
     @State private var deleteTarget: URL?
     @State private var searching = false
-    @State private var query = ""
     @FocusState private var searchFocused: Bool
 
     var body: some View {
@@ -43,7 +42,7 @@ struct SidebarView: View {
     }
 
     private var header: some View {
-        HStack(spacing: 4) {
+        HStack {
             Menu {
                 Button("New File…") { promptText = ""; prompt = .newFile(nil) }
                 Button("New Folder…") { promptText = ""; prompt = .newFolder(nil) }
@@ -51,22 +50,22 @@ struct SidebarView: View {
                 Button("Change Folder…") { model.chooseRoot() }
             } label: {
                 HStack(spacing: 4) {
-                    Text(model.rootFolder?.lastPathComponent ?? "Folder").font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                    Text(model.rootFolder?.lastPathComponent ?? "Folder").font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 }
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Spacer(minLength: 0)
-            IconButton(symbol: "magnifyingglass", help: "Search files") { toggleSearch() }
-            PlaygroundMenu()
+            ChromeIconButton(symbol: "magnifyingglass", help: "Search files", size: 28, selected: searching) { toggleSearch() }
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .frame(height: 52)
     }
 
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass").font(.system(size: 11)).foregroundStyle(.secondary)
-            TextField("Search files", text: $query)
+            TextField("Search files", text: $model.query)
                 .textFieldStyle(.plain).font(.system(size: 13))
                 .focused($searchFocused)
                 .onExitCommand { toggleSearch() }
@@ -78,13 +77,13 @@ struct SidebarView: View {
 
     private func toggleSearch() {
         searching.toggle()
-        query = ""
+        model.query = ""
         searchFocused = searching
     }
 
     @ViewBuilder private var list: some View {
         VStack(alignment: .leading, spacing: 2) {
-            if query.isEmpty {
+            if model.query.isEmpty {
                 ActionRow(title: "New file", symbol: "plus") { promptText = ""; prompt = .newFile(nil) }
                 ForEach(model.tree.filter { !$0.isDirectory }) { TreeRow(node: $0, depth: 0) { menu(for: $0) } }
                 ForEach(model.tree.filter(\.isDirectory)) { section($0) }
@@ -104,7 +103,7 @@ struct SidebarView: View {
         func files(_ nodes: [FileNode]) -> [FileNode] {
             nodes.flatMap { $0.isDirectory ? files($0.children ?? []) : [$0] }
         }
-        return files(model.tree).filter { $0.name.localizedCaseInsensitiveContains(query) }
+        return files(model.tree).filter { $0.name.localizedCaseInsensitiveContains(model.query) }
     }
 
     @ViewBuilder private func menu(for node: FileNode) -> some View {
@@ -198,7 +197,7 @@ private struct TreeRow<Menu: View>: View {
             .padding(.vertical, 5)
             .padding(.leading, 8 + CGFloat(depth) * 14)
             .padding(.trailing, 8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? model.theme.selectedRow : (hovering ? model.theme.hoverRow : Color.clear)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? model.theme.selectedRow : (hovering ? model.theme.hoverRow : Color.clear)))
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
             .onTapGesture {
@@ -239,47 +238,5 @@ private struct ActionRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture(perform: action)
-    }
-}
-
-/// Header icon that opens one of the two scratch playgrounds.
-private struct PlaygroundMenu: View {
-    @EnvironmentObject var model: AppModel
-    @State private var hovering = false
-
-    var body: some View {
-        Menu {
-            Button("PlantUML Playground") { model.openPlayground(kind: .diagram) }
-            Button("Markdown Playground") { model.openPlayground(kind: .markdown) }
-        } label: {
-            Image(systemName: "square.and.pencil")
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
-                .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-        .onHover { hovering = $0 }
-        .help("Open a playground")
-    }
-}
-
-/// A small icon-only header button with a hover highlight.
-private struct IconButton: View {
-    @EnvironmentObject var model: AppModel
-    let symbol: String
-    let help: String
-    let action: () -> Void
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.system(size: 13)).foregroundStyle(.secondary)
-                .frame(width: 24, height: 24)
-                .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .help(help)
     }
 }

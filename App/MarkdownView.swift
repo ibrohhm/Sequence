@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import Combine
 import StudioCore
 
 struct MarkdownDiagram: Encodable, Equatable {
@@ -16,11 +17,13 @@ struct MarkdownView: NSViewRepresentable {
     let preview: MarkdownPreview?
     let baseDirectory: URL
     let theme: Theme
+    let finds: PassthroughSubject<FindRequest, Never>
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
         let view = DiagramWebView.make()
+        view.listen(to: finds)
         view.navigationDelegate = context.coordinator
         view.setValue(false, forKey: "drawsBackground")
         context.coordinator.webView = view

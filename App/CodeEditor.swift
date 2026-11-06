@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import Combine
+import StudioCore
 
 struct CodeEditor: NSViewRepresentable {
     @EnvironmentObject var model: AppModel
@@ -18,6 +20,7 @@ struct CodeEditor: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = false
         textView.allowsUndo = true
         textView.delegate = context.coordinator
+        context.coordinator.listen(to: textView, model.findRequests)
         textView.string = text
         applyTheme(to: scroll, textView)
         Coordinator.highlight(textView, enabled: highlightsPlantUML, theme: model.theme)
@@ -49,7 +52,20 @@ struct CodeEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CodeEditor
         var theme: Theme = .light
+        private var finds: AnyCancellable?
         init(_ parent: CodeEditor) { self.parent = parent }
+
+        func listen(to textView: NSTextView, _ requests: PassthroughSubject<FindRequest, Never>) {
+            finds = requests.sink { [weak textView] request in
+                guard let textView else { return }
+                let selection = textView.selectedRange()
+                let from = request.backwards ? selection.location : selection.location + (request.advance ? selection.length : 0)
+                guard let range = TextSearch.nextRange(of: request.query, in: textView.string, from: from, backwards: request.backwards) else { return }
+                textView.setSelectedRange(range)
+                textView.scrollRangeToVisible(range)
+                textView.showFindIndicator(for: range)
+            }
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }

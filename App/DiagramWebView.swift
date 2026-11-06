@@ -1,10 +1,22 @@
 import AppKit
 import WebKit
+import Combine
 
 /// A web view whose right-click menu holds only Copy Image, and only when the click lands on a diagram.
 final class DiagramWebView: WKWebView {
     private var hitRect: CGRect?
     var zoomsOnPinch = false
+    private var finds: AnyCancellable?
+
+    func listen(to requests: PassthroughSubject<FindRequest, Never>) {
+        finds = requests.sink { [weak self] request in
+            let configuration = WKFindConfiguration()
+            configuration.backwards = request.backwards
+            configuration.caseSensitive = false
+            configuration.wraps = true
+            self?.find(request.query, configuration: configuration) { _ in }
+        }
+    }
 
     override func magnify(with event: NSEvent) {
         guard zoomsOnPinch else { return super.magnify(with: event) }

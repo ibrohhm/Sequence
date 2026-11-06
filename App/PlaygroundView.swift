@@ -15,7 +15,7 @@ struct DiagramPane: View {
                     .textSelection(.enabled)
             }
             if let svg = model.lastSVG {
-                SVGView(svg: svg, theme: model.theme)
+                SVGView(svg: svg, theme: model.theme, finds: model.findRequests)
             } else if model.renderError == nil {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

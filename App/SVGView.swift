@@ -1,15 +1,18 @@
 import SwiftUI
 import WebKit
+import Combine
 
 struct SVGView: NSViewRepresentable {
     let svg: Data
     let theme: Theme
+    let finds: PassthroughSubject<FindRequest, Never>
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
         let view = DiagramWebView.make()
         view.zoomsOnPinch = true
+        view.listen(to: finds)
         view.setValue(false, forKey: "drawsBackground")
         return view
     }

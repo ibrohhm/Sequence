@@ -4,6 +4,12 @@ import AppKit
 import StudioCore
 import UniformTypeIdentifiers
 
+struct FindRequest {
+    let query: String
+    let backwards: Bool
+    let advance: Bool
+}
+
 extension Notification.Name {
     /// Posted by Settings so every window re-resolves Java and Graphviz.
     static let toolPathsChanged = Notification.Name("SequenceToolPathsChanged")
@@ -18,6 +24,9 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var session: DocumentSession?
     @Published var mode: ViewMode = .view
     @Published var showSidebar = true
+    @Published var query = ""
+    @Published var findQuery = ""
+    let findRequests = PassthroughSubject<FindRequest, Never>()
     @Published private(set) var playgroundKind: DocumentKind = .diagram
     private let playgroundDirectory = Playground.defaultDirectory()
     private var modeBeforePlayground: ViewMode?
@@ -124,6 +133,12 @@ enum ViewMode: String { case view, edit, editPreview }
         case .conflict: showConflict = true
         case .fileMissing: notice = "\(session.url.lastPathComponent) was deleted or moved. Your text is still in the editor; Save writes it back."
         }
+    }
+
+    /// Asks the open editor and previews to select the next match of `query`.
+    func find(_ query: String, backwards: Bool = false, advance: Bool = false) {
+        guard !query.isEmpty else { return }
+        findRequests.send(FindRequest(query: query, backwards: backwards, advance: advance))
     }
 
     func select(_ url: URL?) {
