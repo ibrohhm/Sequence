@@ -40,6 +40,19 @@ private func makeExecutable(_ name: String, in dir: URL, exitCode: Int32) throws
         #expect(throws: ToolError.javaMissing) { try locator.java() }
     }
 
+    @Test func bundledRuntimeIsSearchedBeforeSystemDirs() throws {
+        let resources = try makeDir()
+        let bin = resources.appendingPathComponent("jre/bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let bundled = try makeExecutable("java", in: bin, exitCode: 0)
+        let locator = ToolLocator(searchDirs: ToolLocator.bundledDirs(in: resources) + ToolLocator.defaultDirs)
+        #expect(try locator.java().path == bundled.path)
+    }
+
+    @Test func noBundledDirsWithoutResources() {
+        #expect(ToolLocator.bundledDirs(in: nil).isEmpty)
+    }
+
     @Test func missingDotThrowsDotMissing() throws {
         let locator = ToolLocator(searchDirs: [try makeDir()])
         #expect(throws: ToolError.dotMissing) { try locator.dot() }

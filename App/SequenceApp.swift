@@ -40,6 +40,6 @@ struct SequenceApp: App {
     var body: some Scene {
         WindowGroup("Sequence") { WindowRoot() }
             .commands { SequenceCommands() }
-        Settings { SettingsView() }
+        Settings { AboutView() }
     }
 }

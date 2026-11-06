@@ -12,7 +12,6 @@ struct SetupMessageView: View {
             Text(error == .javaMissing ? "PlantUML needs Java to render diagrams. Install it, then retry:" : "Install Graphviz, then retry:")
             Text(error == .javaMissing ? "brew install openjdk" : "brew install graphviz")
                 .font(.system(.body, design: .monospaced)).textSelection(.enabled)
-            Text("Or set the path in Settings (⌘,).").foregroundStyle(.secondary)
             Button("Retry", action: retry)
         }
         .padding(32)

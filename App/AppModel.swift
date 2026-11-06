@@ -10,11 +10,6 @@ struct FindRequest {
     let advance: Bool
 }
 
-extension Notification.Name {
-    /// Posted by Settings so every window re-resolves Java and Graphviz.
-    static let toolPathsChanged = Notification.Name("SequenceToolPathsChanged")
-}
-
 enum ViewMode: String { case view, edit, editPreview }
 
 @MainActor final class AppModel: ObservableObject {
@@ -27,6 +22,9 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var query = ""
     @Published var findQuery = ""
     @Published private(set) var findFocusTick = 0
+    @Published private(set) var isAIRunning = false
+    @Published var aiError: String?
+    @Published private(set) var aiUndoText: String?
     let findRequests = PassthroughSubject<FindRequest, Never>()
     @Published private(set) var playgroundKind: DocumentKind = .diagram
     private let playgroundDirectory = Playground.defaultDirectory()
@@ -56,7 +54,6 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     private static var restoredOnce = false
-    private var toolObserver: AnyCancellable?
 
     /// True for the first window only, so later windows start empty instead of repeating the last folder.
     static func claimRestore() -> Bool {
@@ -65,7 +62,6 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     init(restoreSession: Bool = true) {
-        toolObserver = NotificationCenter.default.publisher(for: .toolPathsChanged).sink { [weak self] _ in self?.resolveTools() }
         playgroundKind = defaults.string(forKey: "playgroundKind") == "markdown" ? .markdown : .diagram
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
         resolveTools()
@@ -78,11 +74,7 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     func resolveTools() {
-        var overrides: [String: URL] = [:]
-        for name in ["java", "dot"] {
-            if let path = defaults.string(forKey: "\(name)Path"), !path.isEmpty { overrides[name] = URL(fileURLWithPath: path) }
-        }
-        let locator = ToolLocator(overrides: overrides)
+        let locator = ToolLocator(searchDirs: ToolLocator.bundledDirs(in: Bundle.main.resourceURL) + ToolLocator.defaultDirs)
         dotURL = try? locator.dot()
         do {
             let java = try locator.java()
@@ -136,6 +128,50 @@ enum ViewMode: String { case view, edit, editPreview }
         }
     }
 
+    /// Rewrites the open document from a plain-language instruction using the Claude CLI; the previous text stays available to undo.
+    func askAI(_ instruction: String) {
+        let prompt = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let session, !isAIRunning, !prompt.isEmpty else { return }
+        guard let claude = try? ToolLocator(searchDirs: ToolLocator.claudeDirs).claude() else {
+            aiError = "Claude Code was not found. Install it and sign in, then try again."
+            return
+        }
+        let before = session.text
+        let kind = DocumentKind(url: session.url)
+        isAIRunning = true
+        aiError = nil
+        Task {
+            defer { isAIRunning = false }
+            do {
+                let result = try await AIEditor(claude: claude).edit(before, instruction: prompt, kind: kind)
+                guard self.session === session, session.text == before else {
+                    aiError = "The file changed while Claude was working, so its result was discarded."
+                    return
+                }
+                aiUndoText = before
+                session.text = result
+                if inPlayground { try? session.save() }
+                scheduleRender(debounce: false)
+            } catch AIEditError.failed(let message) {
+                aiError = message.components(separatedBy: "\n").first ?? message
+            } catch AIEditError.timedOut {
+                aiError = "Claude took too long. Try a smaller change."
+            } catch AIEditError.emptyResponse {
+                aiError = "Claude returned nothing."
+            } catch {
+                aiError = error.localizedDescription
+            }
+        }
+    }
+
+    func undoAIEdit() {
+        guard let session, let text = aiUndoText else { return }
+        session.text = text
+        aiUndoText = nil
+        if inPlayground { try? session.save() }
+        scheduleRender(debounce: false)
+    }
+
     func focusFind() { findFocusTick += 1 }
 
     /// Asks the open editor and previews to select the next match of `query`.
@@ -172,6 +208,8 @@ enum ViewMode: String { case view, edit, editPreview }
             session = try DocumentSession(url: url)
             selection = url
             notice = nil
+            aiError = nil
+            aiUndoText = nil
             lastSVG = nil
             markdownPreview = nil
             renderError = nil

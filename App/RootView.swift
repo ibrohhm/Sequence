@@ -52,6 +52,7 @@ struct RootView: View {
             if let notice = model.notice { banner(notice) }
             if let session = model.session {
                 MainView(session: session).id(session.url)
+                PromptBar(kind: DocumentKind(url: session.url))
             } else {
                 VStack(spacing: 20) {
                     Text("Select a file").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)

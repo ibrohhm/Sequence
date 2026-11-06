@@ -7,13 +7,14 @@ Keep your flows next to your RFCs, browse them in a sidebar, and edit with a liv
 ## Features
 
 - **Folder as a library.** Open any folder. Each window has its own folder, so open a second window (⌘N) to work in two places at once. The first window restores the last folder; new windows start empty. Files appear in a sidebar, with top-level folders as sections. The tree updates when files change on disk.
-- **View, edit, or both.** Switch between View (rendered), Edit (code only) and Edit with preview (code and live render side by side) from the toolbar. Diagrams and markdown share the same three modes.
+- **View, edit, or both.** Switch between View (rendered), Edit (code only) and Edit with preview (code and live render side by side) with the icons in the page header. Diagrams and markdown share the same three modes.
 - **Markdown with diagrams.** ` ```plantuml `, ` ```puml ` and ` ```uml ` fenced blocks render as diagrams inside the markdown preview. Frontmatter is hidden, and raw HTML is escaped.
 - **Live rendering.** PlantUML runs in one long-lived Java process, so previews update as you type.
-- **Playground.** Two scratch editors, **PlantUML Playground** and **Markdown Playground**, opened from the pencil icon in the sidebar header, the File menu, or the empty state when no file is open, always in Edit with preview and with the sidebar hidden (the back arrow in the toolbar returns), for trying a diagram or a markdown snippet without creating a file. Each has its own text, remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
+- **Playground.** Two scratch editors, **PlantUML Playground** and **Markdown Playground**, opened from the left strip, the File menu, or the empty state when no file is open, always in Edit with preview and with the sidebar hidden (the Files icon in the left strip returns), for trying a diagram or a markdown snippet without creating a file. Each has its own text, remembered between launches, and **Save to folder…** writes it out as a real file. It works even before you open a folder.
+- **AI prompt.** Type a change in plain language at the bottom of the editor ("add a retry loop after the payment call") and Claude rewrites the open diagram or document. It needs the [Claude Code](https://claude.com/claude-code) CLI installed and signed in; the text of the open file is sent to Claude. **Undo** restores the text from before the change.
 - **Search and file operations.** Filter files by name, and create, rename or delete (to Trash) from the sidebar.
 - **Export and copy.** Save a diagram as SVG or PNG, or right-click any diagram, in the viewer or inside a markdown preview, and choose **Copy Image**.
-- **Light and Dark themes.** A toggle in the window toolbar overrides the system appearance. Dark follows the VS Code "Dark Modern" palette.
+- **Light and Dark themes.** A toggle in the left strip overrides the system appearance. Dark follows the VS Code "Dark Modern" palette.
 - **Safe editing.** The app asks before discarding unsaved changes, and tells you when a file changes on disk while you have edits.
 
 Supported files: `.puml`, `.plantuml`, `.pu`, `.wsd` (diagrams) and `.md` (markdown).
@@ -21,11 +22,11 @@ Supported files: `.puml`, `.plantuml`, `.pu`, `.wsd` (diagrams) and `.md` (markd
 ## Requirements
 
 - macOS 14 or later
-- Java (not bundled). Install one with Homebrew: `brew install openjdk`
+- A JDK, only to build (for example `brew install openjdk`). The built app bundles its own Java runtime, so the machine you run it on needs no Java.
 - Swift command line tools, to build. Xcode is not needed.
 - Graphviz (optional). Without it PlantUML falls back to its built-in layout engine, which handles class, component, use case, state and activity diagrams.
 
-The app looks for Java in the common Homebrew locations. If yours is elsewhere, set the path in **Settings** (⌘,).
+The app uses its bundled Java runtime. When run without one (for example from source), it falls back to Java in the common Homebrew and system locations.
 
 ## Build and run
 
@@ -36,7 +37,7 @@ cd sequence
 open build/Sequence.app
 ```
 
-`build-app.sh` compiles the Swift package and assembles an unsigned `Sequence.app` in `build/`, with the PlantUML jar bundled inside. Quit a running copy (⌘Q) before rebuilding, or reopening shows the old build.
+`build-app.sh` compiles the Swift package and assembles an ad-hoc signed `Sequence.app` in `build/`, with the PlantUML jar and a trimmed Java runtime bundled inside. Quit a running copy (⌘Q) before rebuilding, or reopening shows the old build.
 
 On first launch, choose a folder. The app remembers it and the last file you opened.
 
@@ -50,7 +51,8 @@ On first launch, choose a folder. The app remembers it and the last file you ope
 | Markdown playground | ⌘⇧M |
 | Save | ⌘S |
 | Show or hide sidebar | ⌘⌃S |
-| Settings | ⌘, |
+| Find in file | ⌘F |
+| About Sequence | ⌘, |
 
 Export SVG and PNG are in the File menu.
 
@@ -95,8 +97,8 @@ Logic lives in `StudioCore` and is covered by tests. Views in `App` are not unit
 
 ## Limitations
 
-- Requires Java at runtime.
-- The app is unsigned, and meant to be built from source.
+- The bundled Java runtime matches the architecture of the machine that built the app, so a build made under Rosetta (x86_64) runs on Apple Silicon only through Rosetta.
+- The app is ad-hoc signed, not notarized, so Gatekeeper blocks the first launch on another Mac (right-click the app and choose Open).
 - `.mdx` is not supported, and there is no Confluence import.
 
 ## Third-party software

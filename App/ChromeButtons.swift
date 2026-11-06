@@ -84,7 +84,7 @@ struct IconRail: View {
                 help: model.theme == .dark ? "Switch to light theme" : "Switch to dark theme",
                 tip: .right
             ) { model.theme = model.theme.toggled }
-            SettingsLink { ChromeIcon(symbol: "gearshape", help: "Settings (⌘,)", tip: .right) }
+            SettingsLink { ChromeIcon(symbol: "gearshape", help: "About Sequence (⌘,)", tip: .right) }
                 .buttonStyle(.plain)
         }
         .padding(.vertical, 8)
