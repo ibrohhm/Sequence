@@ -1,14 +1,14 @@
 import SwiftUI
 import StudioCore
 
-/// The bar above the detail pane: breadcrumb on the left; search, theme, mode switch and save on the right.
+/// The bar above the detail pane: file name on the left; find, theme, mode switch and save on the right.
 struct TopBar: View {
     @EnvironmentObject var model: AppModel
     @FocusState private var searchFocused: Bool
 
     var body: some View {
         HStack(spacing: 10) {
-            Breadcrumb(session: model.session)
+            FileTitle(session: model.session)
             Spacer(minLength: 12)
             if model.session != nil { findField }
             ChromeIconButton(
@@ -21,6 +21,7 @@ struct TopBar: View {
         .padding(.horizontal, 16)
         .frame(height: 52)
         .onChange(of: model.findQuery) { _, query in model.find(query) }
+        .onChange(of: model.findFocusTick) { _, _ in searchFocused = true }
     }
 
     private var findField: some View {
@@ -31,7 +32,7 @@ struct TopBar: View {
                 .focused($searchFocused)
                 .onSubmit { model.find(model.findQuery, advance: true); searchFocused = true }
                 .onExitCommand { model.findQuery = ""; searchFocused = false }
-            Text("⌘K").font(.system(size: 11)).foregroundStyle(.secondary)
+            Text("⌘F").font(.system(size: 11)).foregroundStyle(.secondary)
                 .padding(.horizontal, 5).padding(.vertical, 2)
                 .background(RoundedRectangle(cornerRadius: 4).fill(model.theme.hoverRow))
         }
@@ -39,40 +40,37 @@ struct TopBar: View {
         .frame(width: 240, height: 32)
         .background(RoundedRectangle(cornerRadius: 8).fill(model.theme.panelBackground))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(model.theme.border))
-        .background(Button("") { searchFocused = true }.keyboardShortcut("k").frame(width: 0, height: 0).opacity(0))
     }
 }
 
-/// Subfolders > file (relative to the opened folder), or Playground > language.
-private struct Breadcrumb: View {
+/// The open file's name; right-click to copy its name or path. A playground shows its own title.
+private struct FileTitle: View {
     @EnvironmentObject var model: AppModel
     let session: DocumentSession?
 
-    private var parts: [String] {
-        if model.inPlayground { return ["Playground", model.playgroundKind == .markdown ? "Markdown" : "PlantUML"] }
-        guard let root = model.rootFolder else { return [] }
-        guard let url = session?.url else { return [] }
-        let prefix = root.path + "/"
-        let relative = url.path.hasPrefix(prefix) ? String(url.path.dropFirst(prefix.count)) : url.lastPathComponent
-        return relative.split(separator: "/").map(String.init)
+    private var title: String? {
+        if model.inPlayground { return model.playgroundKind == .markdown ? "Markdown Playground" : "PlantUML Playground" }
+        return session?.url.lastPathComponent
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(parts.enumerated()), id: \.offset) { index, name in
-                if index > 0 { Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary) }
-                if index == parts.count - 1 {
-                    HStack(spacing: 4) {
-                        Text(name).font(.system(size: 14, weight: .medium)).lineLimit(1)
-                        if let session, !model.inPlayground { DirtyDot(session: session) }
-                    }
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 7).fill(model.theme.hoverRow))
-                } else {
-                    Text(name).font(.system(size: 14)).foregroundStyle(.secondary).lineLimit(1)
+        if let title {
+            HStack(spacing: 4) {
+                Text(title).font(.system(size: 14, weight: .medium)).lineLimit(1)
+                if let session, !model.inPlayground { DirtyDot(session: session) }
+            }
+            .contextMenu {
+                if let session, !model.inPlayground {
+                    Button("Copy Name") { copy(session.url.lastPathComponent) }
+                    Button("Copy Path") { copy(session.url.path) }
                 }
             }
         }
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
 

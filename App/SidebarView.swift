@@ -57,6 +57,7 @@ struct SidebarView: View {
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Spacer(minLength: 0)
             ChromeIconButton(symbol: "magnifyingglass", help: "Search files", size: 28, selected: searching) { toggleSearch() }
+            ChromeIconButton(symbol: "sidebar.left", help: "Hide sidebar (⌘⌃S)", size: 28) { model.showSidebar = false }
         }
         .padding(.horizontal, 16)
         .frame(height: 52)

@@ -7,7 +7,6 @@ struct MainView: View {
 
     var body: some View {
         content
-            .navigationTitle(model.inPlayground ? (isMarkdown ? "Markdown Playground" : "PlantUML Playground") : session.url.lastPathComponent + (session.isDirty ? " •" : ""))
             .onChange(of: model.mode) { _, _ in model.scheduleRender(debounce: false) }
     }
 

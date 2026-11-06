@@ -26,6 +26,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var showSidebar = true
     @Published var query = ""
     @Published var findQuery = ""
+    @Published private(set) var findFocusTick = 0
     let findRequests = PassthroughSubject<FindRequest, Never>()
     @Published private(set) var playgroundKind: DocumentKind = .diagram
     private let playgroundDirectory = Playground.defaultDirectory()
@@ -134,6 +135,8 @@ enum ViewMode: String { case view, edit, editPreview }
         case .fileMissing: notice = "\(session.url.lastPathComponent) was deleted or moved. Your text is still in the editor; Save writes it back."
         }
     }
+
+    func focusFind() { findFocusTick += 1 }
 
     /// Asks the open editor and previews to select the next match of `query`.
     func find(_ query: String, backwards: Bool = false, advance: Bool = false) {

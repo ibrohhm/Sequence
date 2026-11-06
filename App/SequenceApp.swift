@@ -21,6 +21,9 @@ private struct SequenceCommands: Commands {
             Button("PlantUML Playground") { model?.openPlayground(kind: .diagram) }.keyboardShortcut("p", modifiers: [.command, .shift]).disabled(model == nil)
             Button("Markdown Playground") { model?.openPlayground(kind: .markdown) }.keyboardShortcut("m", modifiers: [.command, .shift]).disabled(model == nil)
         }
+        CommandGroup(replacing: .textEditing) {
+            Button("Find in File") { model?.focusFind() }.keyboardShortcut("f").disabled(model?.session == nil)
+        }
         CommandGroup(replacing: .saveItem) {
             Button("Save") { model?.save() }.keyboardShortcut("s").disabled(model?.session == nil)
             Divider()
@@ -35,7 +38,7 @@ struct SequenceApp: App {
     init() { NSApplication.shared.setActivationPolicy(.regular) }
 
     var body: some Scene {
-        WindowGroup { WindowRoot() }
+        WindowGroup("Sequence") { WindowRoot() }
             .commands { SequenceCommands() }
         Settings { SettingsView() }
     }

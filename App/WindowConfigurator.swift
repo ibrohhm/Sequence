@@ -21,7 +21,7 @@ struct WindowConfigurator: NSViewRepresentable {
             guard let window else { return }
             window.styleMask.remove(.fullSizeContentView)
             window.titlebarAppearsTransparent = true
-            window.titleVisibility = .hidden
+            window.titleVisibility = .visible
             window.titlebarSeparatorStyle = .none
             window.backgroundColor = theme.frameNSColor
         }
