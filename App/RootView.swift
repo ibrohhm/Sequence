@@ -126,13 +126,17 @@ private extension View {
 /// A drag handle in the gap right of the sidebar that sets its width.
 private struct SidebarResizer: View {
     @Binding var width: Double
+    @EnvironmentObject var model: AppModel
     @State private var startWidth: Double?
+    @State private var hovering = false
 
     var body: some View {
-        Color.clear
+        RoundedRectangle(cornerRadius: 1).fill(hovering || startWidth != nil ? model.theme.accent.opacity(0.7) : Color.clear)
+            .frame(width: 2)
             .frame(width: 8)
             .contentShape(Rectangle())
             .onHover { inside in
+                hovering = inside
                 if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
             }
             .gesture(

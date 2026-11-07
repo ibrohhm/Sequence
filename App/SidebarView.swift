@@ -22,6 +22,7 @@ struct SidebarView: View {
     @State private var deleteTarget: URL?
     @State private var searching = false
     @FocusState private var searchFocused: Bool
+    @State private var vaultHover = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,18 +58,23 @@ struct SidebarView: View {
                 Button("New File…") { promptText = ""; prompt = .newFile(nil) }
                 Button("New Folder…") { promptText = ""; prompt = .newFolder(nil) }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(model.theme.accent)
                     Text(model.activeVault?.name ?? model.rootFolder?.lastPathComponent ?? "Vault").font(.system(size: 14, weight: .semibold)).lineLimit(1)
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 }
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: 8).fill(vaultHover ? model.theme.hoverRow : Color.clear))
+                .onHover { vaultHover = $0 }
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             Spacer(minLength: 0)
             ChromeIconButton(symbol: "magnifyingglass", help: "Search files", size: 28, selected: searching) { toggleSearch() }
             ChromeIconButton(symbol: "sidebar.left", help: "Hide sidebar (⌘⌃S)", size: 28) { model.showSidebar = false }
         }
-        .padding(.horizontal, 16)
-        .frame(height: 52)
+        .padding(.horizontal, 8)
+        .frame(height: 56)
+        .overlay(alignment: .bottom) { Rectangle().fill(model.theme.border).frame(height: 1) }
     }
 
     private var searchField: some View {

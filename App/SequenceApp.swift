@@ -25,6 +25,9 @@ private struct SequenceCommands: Commands {
         CommandGroup(replacing: .textEditing) {
             Button("Find in File") { model?.focusFind() }.keyboardShortcut("f").disabled(model?.session == nil)
         }
+        CommandMenu("Ask") {
+            Button("Ask AI") { model?.focusPrompt() }.keyboardShortcut("k").disabled(model?.session == nil)
+        }
         CommandMenu("Format") {
             Button("Bold") { model?.format(.bold) }.keyboardShortcut("b").disabled(!(model?.canFormatMarkdown ?? false))
             Button("Italic") { model?.format(.italic) }.keyboardShortcut("i").disabled(!(model?.canFormatMarkdown ?? false))

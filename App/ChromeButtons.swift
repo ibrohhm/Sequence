@@ -64,13 +64,13 @@ struct ChromeIcon: View {
     }
 }
 
-/// The narrow strip left of the panels: files, the two playgrounds, the theme toggle and settings.
+/// The narrow strip left of the panels: files, the two playgrounds, the theme toggle and About.
 struct IconRail: View {
     @EnvironmentObject var model: AppModel
 
     var body: some View {
         VStack(spacing: 6) {
-            ChromeIconButton(symbol: "folder", help: "Files (⌘⌃S)", selected: !model.inPlayground, tip: .right) { showFiles() }
+            ChromeIconButton(symbol: "folder", help: "Files (⌘⌃S)", selected: !model.inPlayground && model.showSidebar, tip: .right) { showFiles() }
                 .keyboardShortcut("s", modifiers: [.command, .control])
             ChromeIconButton(symbol: "flowchart", help: "PlantUML playground (⌘⇧P)", selected: model.inPlayground && model.playgroundKind == .diagram, tip: .right) {
                 model.openPlayground(kind: .diagram)

@@ -6,6 +6,7 @@ struct PromptBar: View {
     @EnvironmentObject var model: AppModel
     let kind: DocumentKind
     @State private var text = ""
+    @FocusState private var focused: Bool
 
     private var placeholder: String {
         kind == .markdown ? "Describe a change to this document" : "Describe a change, e.g. add a retry loop after the payment call"
@@ -22,6 +23,7 @@ struct PromptBar: View {
                 Image(systemName: "sparkles").font(.system(size: 13)).foregroundStyle(.secondary)
                 TextField(placeholder, text: $text, axis: .vertical)
                     .textFieldStyle(.plain).font(.system(size: 13)).lineLimit(1...5)
+                    .focused($focused)
                     .disabled(model.isAIRunning)
                     .onSubmit(send)
                 if model.aiUndoText != nil && !model.isAIRunning {
@@ -44,6 +46,7 @@ struct PromptBar: View {
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(model.theme.border))
         }
         .padding(12)
+        .onChange(of: model.promptFocusTick) { _, _ in focused = true }
     }
 
     private func send() {

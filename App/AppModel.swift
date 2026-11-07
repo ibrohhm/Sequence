@@ -24,6 +24,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var query = ""
     @Published var findQuery = ""
     @Published private(set) var findFocusTick = 0
+    @Published private(set) var promptFocusTick = 0
     @Published private(set) var isAIRunning = false
     @Published var aiError: String?
     @Published private(set) var aiUndoText: String?
@@ -220,6 +221,8 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     func focusFind() { findFocusTick += 1 }
+
+    func focusPrompt() { promptFocusTick += 1 }
 
     /// Asks the open editor and previews to select the next match of `query`.
     func find(_ query: String, backwards: Bool = false, advance: Bool = false) {

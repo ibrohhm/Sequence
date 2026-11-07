@@ -6,6 +6,7 @@ struct PageHeader: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var session: DocumentSession
     @FocusState private var findFocused: Bool
+    @State private var findOpen = false
 
     private var title: String {
         guard model.inPlayground else { return session.url.lastPathComponent }
@@ -37,7 +38,7 @@ struct PageHeader: View {
                     }
                 }
                 Spacer(minLength: 12)
-                findField
+                if findOpen { findField } else { ChromeIconButton(symbol: "magnifyingglass", help: "Find in file (⌘F)", size: 28) { openFind() } }
                 if model.inPlayground {
                     Button { model.saveCopyOfPlayground() } label: {
                         Text("Save to folder…").font(.system(size: 13, weight: .medium))
@@ -51,11 +52,14 @@ struct PageHeader: View {
                 }
             }
             .padding(.horizontal, 16)
-            .frame(height: 60)
+            .frame(height: 56)
             Rectangle().fill(model.theme.border).frame(height: 1)
         }
         .onChange(of: model.findQuery) { _, query in model.find(query) }
-        .onChange(of: model.findFocusTick) { _, _ in findFocused = true }
+        .onChange(of: model.findFocusTick) { _, _ in openFind() }
+        .onChange(of: findFocused) { _, focused in
+            if !focused && model.findQuery.isEmpty { findOpen = false }
+        }
     }
 
     private var findField: some View {
@@ -65,15 +69,18 @@ struct PageHeader: View {
                 .textFieldStyle(.plain).font(.system(size: 13))
                 .focused($findFocused)
                 .onSubmit { model.find(model.findQuery, advance: true); findFocused = true }
-                .onExitCommand { model.findQuery = ""; findFocused = false }
-            Text("⌘F").font(.system(size: 11)).foregroundStyle(.secondary)
-                .padding(.horizontal, 5).padding(.vertical, 2)
-                .background(RoundedRectangle(cornerRadius: 4).fill(model.theme.hoverRow))
+                .onExitCommand { model.findQuery = ""; findFocused = false; findOpen = false }
         }
         .padding(.horizontal, 10)
-        .frame(width: 220, height: 28)
+        .frame(width: 200, height: 28)
+        .onAppear { findFocused = true }
         .background(RoundedRectangle(cornerRadius: 8).fill(model.theme.panelBackground))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(model.theme.border))
+    }
+
+    private func openFind() {
+        findOpen = true
+        findFocused = true
     }
 
     private func copy(_ text: String) {
@@ -83,10 +90,11 @@ struct PageHeader: View {
 }
 
 private struct DirtyDot: View {
+    @EnvironmentObject var model: AppModel
     @ObservedObject var session: DocumentSession
 
     var body: some View {
-        if session.isDirty { Circle().fill(Color.secondary).frame(width: 6, height: 6) }
+        if session.isDirty { Circle().fill(model.theme.accent).frame(width: 7, height: 7) }
     }
 }
 
