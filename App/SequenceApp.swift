@@ -8,18 +8,19 @@ private struct WindowRoot: View {
         RootView()
             .environmentObject(model)
             .focusedSceneObject(model)
-            .background(WindowActivation { model.becameActive() })
+            .background(WindowActivation(onActivate: { model.becameActive() }, onClose: { model.windowClosed() }))
     }
 }
 
 private struct SequenceCommands: Commands {
     @FocusedObject private var model: AppModel?
-    @Environment(\.openWindow) private var openWindow
+    @AppStorage("aiEditorEnabled") private var aiEnabled = true
+    @Environment(\.openSettings) private var openSettings
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Button("Add Folder as Vault…") { model?.chooseRoot() }.keyboardShortcut("o").disabled(model == nil)
-            Button("Manage Vaults…") { openWindow(id: "vaults") }
+            Button("Manage Vaults…") { openSettings(tab: .vaults) }
             Divider()
             Button("PlantUML Playground") { model?.openPlayground(kind: .diagram) }.keyboardShortcut("p", modifiers: [.command, .shift]).disabled(model == nil)
             Button("Markdown Playground") { model?.openPlayground(kind: .markdown) }.keyboardShortcut("m", modifiers: [.command, .shift]).disabled(model == nil)
@@ -28,7 +29,7 @@ private struct SequenceCommands: Commands {
             Button("Find in File") { model?.focusFind() }.keyboardShortcut("f").disabled(model?.session == nil)
         }
         CommandMenu("Ask") {
-            Button("Ask AI") { model?.focusPrompt() }.keyboardShortcut("k").disabled(model?.session == nil)
+            Button("Ask AI") { model?.focusPrompt() }.keyboardShortcut("k").disabled(model?.session == nil || !aiEnabled)
         }
         CommandMenu("Format") {
             Button("Bold") { model?.format(.bold) }.keyboardShortcut("b").disabled(!(model?.canFormatMarkdown ?? false))
@@ -50,8 +51,6 @@ struct SequenceApp: App {
     var body: some Scene {
         WindowGroup("Sequence") { WindowRoot() }
             .commands { SequenceCommands() }
-        Window("Vaults", id: "vaults") { VaultsView() }
-            .windowResizability(.contentSize)
-        Settings { AboutView() }
+        Settings { SettingsView() }
     }
 }

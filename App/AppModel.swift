@@ -62,6 +62,7 @@ enum ViewMode: String { case view, edit, editPreview }
     private let defaults = UserDefaults.standard
     private let store = VaultStore.shared
     private var vaultSub: AnyCancellable?
+    private var defaultsSub: AnyCancellable?
 
     /// The model of the window the user last focused; the Settings window acts on it.
     static weak var active: AppModel?
@@ -82,6 +83,10 @@ enum ViewMode: String { case view, edit, editPreview }
     init(restoreSession: Bool = true) {
         playgroundKind = defaults.string(forKey: "playgroundKind") == "markdown" ? .markdown : .diagram
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
+        defaultsSub = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification).sink { [weak self] _ in
+            guard let self, let saved = Theme(rawValue: self.defaults.string(forKey: "theme") ?? ""), saved != self.theme else { return }
+            self.theme = saved
+        }
         vaultSub = store.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         resolveTools()
         if restoreSession, let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
@@ -109,8 +114,15 @@ enum ViewMode: String { case view, edit, editPreview }
 
     var vaults: [Vault] { store.vaults }
 
+    func windowClosed() {
+        guard AppModel.active === self else { return }
+        AppModel.active = nil
+        store.hasWindow = false
+    }
+
     func becameActive() {
         AppModel.active = self
+        store.hasWindow = true
         store.activePath = rootFolder?.standardizedFileURL.path
     }
 

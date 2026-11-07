@@ -7,6 +7,7 @@ import StudioCore
 
     @Published private(set) var vaults: [Vault]
     @Published var activePath: String?
+    @Published var hasWindow = false
 
     private init() { vaults = VaultList.load(from: VaultList.defaultFile()).vaults }
 

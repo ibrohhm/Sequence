@@ -5,8 +5,6 @@ import StudioCore
 struct AboutView: View {
     @AppStorage("theme") private var theme = "light"
     @State private var java = "Checking…"
-    @State private var graphviz = "Checking…"
-    @State private var claude = "Checking…"
 
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev" }
 
@@ -17,30 +15,30 @@ struct AboutView: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
-            Text("Sequence").font(.system(size: 20, weight: .semibold))
-            Text("Version \(version)").font(.system(size: 12)).foregroundStyle(.secondary)
-            Text("View and edit PlantUML diagrams and markdown from a folder.")
-                .font(.system(size: 13)).multilineTextAlignment(.center).padding(.top, 6)
-            Divider().padding(.vertical, 12)
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+        Form {
+            Section {
+                VStack(spacing: 6) {
+                    Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 72, height: 72)
+                    Text("Sequence").font(.system(size: 20, weight: .semibold))
+                    Text("Version \(version)").font(.system(size: 12)).foregroundStyle(.secondary)
+                    Text("View and edit PlantUML diagrams and markdown from a folder.")
+                        .font(.system(size: 13)).multilineTextAlignment(.center).padding(.top, 4)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            Section {
                 row("PlantUML", plantUMLVersion)
                 row("Java", java)
-                row("Graphviz", graphviz)
-                row("Claude Code", claude)
             }
         }
-        .padding(24)
-        .frame(width: 420)
+        .formStyle(.grouped)
         .preferredColorScheme((Theme(rawValue: theme) ?? .light).colorScheme)
         .task { resolve() }
     }
 
     private func row(_ name: String, _ value: String) -> some View {
-        GridRow {
-            Text(name).foregroundStyle(.secondary)
-            Text(value).textSelection(.enabled).lineLimit(2)
+        LabeledContent(name) {
+            Text(value).textSelection(.enabled).lineLimit(2).multilineTextAlignment(.trailing)
         }
         .font(.system(size: 12))
     }
@@ -53,7 +51,5 @@ struct AboutView: View {
         } else {
             java = "Not found"
         }
-        claude = (try? ToolLocator(searchDirs: ToolLocator.claudeDirs).claude())?.path ?? "Not found (the AI prompt is unavailable)"
-        graphviz = (try? locator.dot())?.path ?? "Not installed (using the built-in layout engine)"
     }
 }

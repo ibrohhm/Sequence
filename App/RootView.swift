@@ -4,7 +4,8 @@ import StudioCore
 struct RootView: View {
     @EnvironmentObject var model: AppModel
     @AppStorage("sidebarWidth") private var sidebarWidth = 236.0
-    @Environment(\.openWindow) private var openWindow
+    @AppStorage("aiEditorEnabled") private var aiEnabled = true
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Group {
@@ -14,7 +15,7 @@ struct RootView: View {
                 VStack(spacing: 12) {
                     Text("Choose a vault of PlantUML and markdown files").font(.title2)
                     Button("Add Folder as Vault…") { model.chooseRoot() }
-                    Button("Manage Vaults…") { openWindow(id: "vaults") }
+                    Button("Manage Vaults…") { openSettings(tab: .vaults) }
                     PlaygroundChoices().frame(width: 260).padding(.top, 8)
                 }
             } else {
@@ -56,7 +57,7 @@ struct RootView: View {
             if let notice = model.notice { banner(notice) }
             if let session = model.session {
                 MainView(session: session).id(session.url)
-                PromptBar(kind: DocumentKind(url: session.url))
+                if aiEnabled { PromptBar(kind: DocumentKind(url: session.url)) }
             } else {
                 VStack(spacing: 20) {
                     Text("Select a file").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)

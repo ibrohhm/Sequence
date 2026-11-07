@@ -1,38 +1,33 @@
 import SwiftUI
 import StudioCore
 
-/// The vault control page: switch, add, create, rename, reveal and remove vaults.
+/// The Vaults tab of the Settings window: switch, add, create, rename, reveal and remove vaults.
 struct VaultsView: View {
     @ObservedObject private var store = VaultStore.shared
-    @AppStorage("theme") private var themeName = "light"
     @State private var creating = false
     @State private var newName = ""
     @FocusState private var nameFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if store.vaults.isEmpty {
-                Text("No vaults yet. Create one or add a folder.")
-                    .font(.system(size: 13)).foregroundStyle(.secondary).padding(16)
-            } else {
-                ScrollView {
-                    VStack(spacing: 2) {
-                        ForEach(store.vaults) { vault in
-                            VaultRow(vault: vault, active: vault.path == store.activePath)
-                        }
-                    }
-                    .padding(8)
+        Form {
+            Section {
+                if store.vaults.isEmpty {
+                    Text("No vaults yet. Create one or add a folder.").foregroundStyle(.secondary)
                 }
-                .frame(maxHeight: 260)
+                ForEach(store.vaults) { vault in
+                    VaultRow(vault: vault, active: vault.path == store.activePath, enabled: store.hasWindow)
+                }
+            } header: {
+                Text("Your vaults")
+            } footer: {
+                if !store.hasWindow { Text("Open a Sequence window to switch or add vaults.") }
             }
-            Divider()
-            addSection.padding(16)
+            Section { addControls }
         }
-        .frame(width: 440)
-        .preferredColorScheme((Theme(rawValue: themeName) ?? .light).colorScheme)
-            }
+        .formStyle(.grouped)
+    }
 
-    @ViewBuilder private var addSection: some View {
+    @ViewBuilder private var addControls: some View {
         if creating {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -47,14 +42,11 @@ struct VaultsView: View {
             }
         } else {
             HStack(spacing: 8) {
-                Button { creating = true } label: {
-                    Label("New vault…", systemImage: "plus").frame(maxWidth: .infinity)
-                }
-                Button { AppModel.active?.chooseRoot() } label: {
-                    Label("Add folder as vault…", systemImage: "folder").frame(maxWidth: .infinity)
-                }
+                Button { creating = true } label: { Label("New vault…", systemImage: "plus").frame(maxWidth: .infinity) }
+                Button { AppModel.active?.chooseRoot() } label: { Label("Add folder as vault…", systemImage: "folder").frame(maxWidth: .infinity) }
             }
             .controlSize(.large)
+            .disabled(!store.hasWindow)
         }
     }
 
@@ -70,12 +62,13 @@ struct VaultsView: View {
     }
 }
 
-/// One vault: click to switch; the actions menu shows on hover.
+/// One vault: click to switch; the actions menu stays faintly visible and strengthens on hover.
 private struct VaultRow: View {
     @ObservedObject private var store = VaultStore.shared
     @AppStorage("theme") private var themeName = "light"
     let vault: Vault
     let active: Bool
+    let enabled: Bool
     @State private var hovering = false
     @State private var editing = false
     @State private var draft = ""
@@ -114,14 +107,13 @@ private struct VaultRow: View {
                 Image(systemName: "ellipsis").foregroundStyle(.secondary).frame(width: 26, height: 26)
             }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-            .opacity(hovering ? 1 : 0)
+            .opacity(hovering ? 1 : 0.4)
         }
-        .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(active ? theme.selectedRow : (hovering ? theme.hoverRow : Color.clear)))
+        .padding(.vertical, 2)
         .opacity(missing ? 0.6 : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { if !editing { AppModel.active?.switchVault(vault) } }
+        .onTapGesture { if !editing && enabled { AppModel.active?.switchVault(vault) } }
     }
 
     private func commit() {

@@ -31,10 +31,12 @@ struct WindowConfigurator: NSViewRepresentable {
 /// Calls `onActivate` whenever the hosting window becomes the key window.
 struct WindowActivation: NSViewRepresentable {
     let onActivate: () -> Void
+    var onClose: () -> Void = {}
 
     func makeNSView(context: Context) -> NSView {
         let view = ActivationView()
         view.onActivate = onActivate
+        view.onClose = onClose
         return view
     }
 
@@ -43,16 +45,25 @@ struct WindowActivation: NSViewRepresentable {
 
 private final class ActivationView: NSView {
     var onActivate: () -> Void = {}
+    var onClose: () -> Void = {}
     private var token: NSObjectProtocol?
+    private var closeToken: NSObjectProtocol?
 
     override func viewDidMoveToWindow() {
         if let token { NotificationCenter.default.removeObserver(token) }
+        if let closeToken { NotificationCenter.default.removeObserver(closeToken) }
         guard let window else { return }
+        closeToken = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [weak self] _ in
+            self?.onClose()
+        }
         token = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
             self?.onActivate()
         }
         if window.isKeyWindow { onActivate() }
     }
 
-    deinit { if let token { NotificationCenter.default.removeObserver(token) } }
+    deinit {
+        if let token { NotificationCenter.default.removeObserver(token) }
+        if let closeToken { NotificationCenter.default.removeObserver(closeToken) }
+    }
 }

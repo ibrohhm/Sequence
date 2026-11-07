@@ -54,7 +54,7 @@ On first launch, choose a folder. The app remembers it and the last file you ope
 | Show or hide sidebar | ⌘⌃S |
 | Find in file | ⌘F |
 | Bold, italic (markdown) | ⌘B, ⌘I |
-| About Sequence | ⌘, |
+| Settings (theme, AI editor, vaults, about) | ⌘, |
 
 Export SVG and PNG are in the File menu.
 
