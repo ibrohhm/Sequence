@@ -87,17 +87,13 @@ struct SidebarView: View {
             if model.query.isEmpty {
                 ActionRow(title: "New file", symbol: "plus") { promptText = ""; prompt = .newFile(nil) }
                 ForEach(model.tree.filter { !$0.isDirectory }) { TreeRow(node: $0, depth: 0) { menu(for: $0) } }
-                ForEach(model.tree.filter(\.isDirectory)) { section($0) }
+                ForEach(model.tree.filter(\.isDirectory)) { TreeRow(node: $0, depth: 0, startsExpanded: true) { menu(for: $0) } }
             } else if matches.isEmpty {
                 Text("No matches").font(.system(size: 13)).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 6)
             } else {
                 ForEach(matches) { TreeRow(node: $0, depth: 0) { menu(for: $0) } }
             }
         }
-    }
-
-    private func section(_ node: FileNode) -> some View {
-        SectionView(node: node) { menu(for: $0) }
     }
 
     private var matches: [FileNode] {
@@ -133,45 +129,12 @@ struct SidebarView: View {
     }
 }
 
-/// A top-level folder: a collapsible header over its children.
-private struct SectionView<Menu: View>: View {
-    let node: FileNode
-    @ViewBuilder let menu: (FileNode) -> Menu
-    @State private var expanded = true
-    @State private var hovering = false
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 9, weight: .semibold))
-                    .rotationEffect(.degrees(expanded ? 90 : 0))
-                    .frame(width: 10)
-                Text(node.name).lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-            .padding(.leading, 8).padding(.vertical, 3).padding(.trailing, 8)
-            .background(RoundedRectangle(cornerRadius: 6).fill(hovering ? model.theme.hoverRow : Color.clear))
-            .contentShape(Rectangle())
-            .onHover { hovering = $0 }
-            .onTapGesture { withAnimation(.easeOut(duration: 0.12)) { expanded.toggle() } }
-            .contextMenu { menu(node) }
-            .padding(.top, 12)
-
-            if expanded {
-                ForEach(node.children ?? []) { TreeRow(node: $0, depth: 0) { menu($0) } }
-            }
-        }
-    }
-}
-
 /// One file or folder row with a grey selected state and a lighter grey hover highlight.
 private struct TreeRow<Menu: View>: View {
     @EnvironmentObject var model: AppModel
     let node: FileNode
     let depth: Int
+    var startsExpanded = false
     @ViewBuilder let menu: (FileNode) -> Menu
     @State private var expanded = false
     @State private var hovering = false
@@ -187,9 +150,11 @@ private struct TreeRow<Menu: View>: View {
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                         .frame(width: 12)
+                    Image(systemName: expanded ? "folder.fill" : "folder").foregroundStyle(.secondary).frame(width: 16)
                     Text(node.name).lineLimit(1)
                 } else {
-                    Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 14)
+                    Color.clear.frame(width: 12, height: 1)
+                    Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 16)
                     Text(node.name).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -218,6 +183,7 @@ private struct TreeRow<Menu: View>: View {
             }
         }
         .onAppear {
+            if startsExpanded { expanded = true }
             if let selection = model.selection, selection.path.hasPrefix(node.id.path + "/") { expanded = true }
         }
     }

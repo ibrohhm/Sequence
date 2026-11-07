@@ -3,6 +3,7 @@ import StudioCore
 
 struct RootView: View {
     @EnvironmentObject var model: AppModel
+    @AppStorage("sidebarWidth") private var sidebarWidth = 236.0
 
     var body: some View {
         Group {
@@ -19,7 +20,8 @@ struct RootView: View {
                     IconRail().zIndex(1)
                     HStack(spacing: 8) {
                         if model.showSidebar && !model.inPlayground {
-                            SidebarView().frame(width: 236).panel(model.theme, fill: model.theme.sidebarBackground)
+                            SidebarView().frame(width: sidebarWidth).panel(model.theme, fill: model.theme.sidebarBackground)
+                                .overlay(alignment: .trailing) { SidebarResizer(width: $sidebarWidth).offset(x: 8) }
                         }
                         detail.panel(model.theme, fill: model.theme.panelBackground)
                     }
@@ -116,5 +118,29 @@ private extension View {
         background(fill)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.border))
+    }
+}
+
+/// A drag handle in the gap right of the sidebar that sets its width.
+private struct SidebarResizer: View {
+    @Binding var width: Double
+    @State private var startWidth: Double?
+
+    var body: some View {
+        Color.clear
+            .frame(width: 8)
+            .contentShape(Rectangle())
+            .onHover { inside in
+                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { drag in
+                        let start = startWidth ?? width
+                        startWidth = start
+                        width = min(480, max(180, start + drag.translation.width))
+                    }
+                    .onEnded { _ in startWidth = nil }
+            )
     }
 }
