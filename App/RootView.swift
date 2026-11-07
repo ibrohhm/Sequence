@@ -4,6 +4,7 @@ import StudioCore
 struct RootView: View {
     @EnvironmentObject var model: AppModel
     @AppStorage("sidebarWidth") private var sidebarWidth = 236.0
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Group {
@@ -13,7 +14,7 @@ struct RootView: View {
                 VStack(spacing: 12) {
                     Text("Choose a vault of PlantUML and markdown files").font(.title2)
                     Button("Add Folder as Vault…") { model.chooseRoot() }
-                    Button("Manage Vaults…") { model.showVaults = true }
+                    Button("Manage Vaults…") { openWindow(id: "vaults") }
                     PlaygroundChoices().frame(width: 260).padding(.top, 8)
                 }
             } else {
@@ -34,7 +35,6 @@ struct RootView: View {
         .background(model.theme.frameBackground)
         .preferredColorScheme(model.theme.colorScheme)
         .background(WindowConfigurator(theme: model.theme))
-        .sheet(isPresented: $model.showVaults) { VaultsView() }
         .alert("Unsaved changes", isPresented: Binding(get: { model.pendingSelection != nil }, set: { if !$0 { model.cancelPendingSelection() } })) {
             Button("Save") { model.resolvePendingSelection(save: true) }
             Button("Discard", role: .destructive) { model.resolvePendingSelection(save: false) }

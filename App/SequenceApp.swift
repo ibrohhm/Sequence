@@ -8,16 +8,18 @@ private struct WindowRoot: View {
         RootView()
             .environmentObject(model)
             .focusedSceneObject(model)
+            .background(WindowActivation { model.becameActive() })
     }
 }
 
 private struct SequenceCommands: Commands {
     @FocusedObject private var model: AppModel?
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
             Button("Add Folder as Vault…") { model?.chooseRoot() }.keyboardShortcut("o").disabled(model == nil)
-            Button("Manage Vaults…") { model?.showVaults = true }.disabled(model == nil)
+            Button("Manage Vaults…") { openWindow(id: "vaults") }
             Divider()
             Button("PlantUML Playground") { model?.openPlayground(kind: .diagram) }.keyboardShortcut("p", modifiers: [.command, .shift]).disabled(model == nil)
             Button("Markdown Playground") { model?.openPlayground(kind: .markdown) }.keyboardShortcut("m", modifiers: [.command, .shift]).disabled(model == nil)
@@ -48,6 +50,8 @@ struct SequenceApp: App {
     var body: some Scene {
         WindowGroup("Sequence") { WindowRoot() }
             .commands { SequenceCommands() }
+        Window("Vaults", id: "vaults") { VaultsView() }
+            .windowResizability(.contentSize)
         Settings { AboutView() }
     }
 }

@@ -13,6 +13,7 @@ struct SidebarView: View {
     @State private var deleteTarget: URL?
     @FocusState private var searchFocused: Bool
     @State private var vaultHover = false
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(spacing: 0) {
@@ -47,7 +48,7 @@ struct SidebarView: View {
                     }
                 }
                 Divider()
-                Button("Manage Vaults…") { model.showVaults = true }
+                Button("Manage Vaults…") { openWindow(id: "vaults") }
                 Divider()
             } label: {
                 HStack(spacing: 6) {

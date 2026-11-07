@@ -22,8 +22,6 @@ enum ViewMode: String { case view, edit, editPreview }
 
 @MainActor final class AppModel: ObservableObject {
     @Published var rootFolder: URL?
-    @Published private(set) var vaults: [Vault] = []
-    @Published var showVaults = false
     @Published var tree: [FileNode] = []
     @Published var selection: URL?
     @Published var session: DocumentSession?
@@ -62,6 +60,11 @@ enum ViewMode: String { case view, edit, editPreview }
     private var renderTask: Task<Void, Never>?
     private var watcher: FolderWatcher?
     private let defaults = UserDefaults.standard
+    private let store = VaultStore.shared
+    private var vaultSub: AnyCancellable?
+
+    /// The model of the window the user last focused; the Settings window acts on it.
+    static weak var active: AppModel?
 
     private var jarURL: URL {
         Bundle.main.url(forResource: "plantuml", withExtension: "jar")
@@ -79,7 +82,7 @@ enum ViewMode: String { case view, edit, editPreview }
     init(restoreSession: Bool = true) {
         playgroundKind = defaults.string(forKey: "playgroundKind") == "markdown" ? .markdown : .diagram
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
-        vaults = VaultList.load(from: VaultList.defaultFile()).vaults
+        vaultSub = store.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         resolveTools()
         if restoreSession, let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
             openRoot(URL(fileURLWithPath: path))
@@ -104,6 +107,13 @@ enum ViewMode: String { case view, edit, editPreview }
         }
     }
 
+    var vaults: [Vault] { store.vaults }
+
+    func becameActive() {
+        AppModel.active = self
+        store.activePath = rootFolder?.standardizedFileURL.path
+    }
+
     /// The vault whose folder is open.
     var activeVault: Vault? { vaults.first { $0.path == rootFolder?.standardizedFileURL.path } }
 
@@ -123,23 +133,13 @@ enum ViewMode: String { case view, edit, editPreview }
     func createVault(named name: String) {
         var created: Vault?
         perform {
-            var list = VaultList.load(from: VaultList.defaultFile())
-            created = try list.create(named: name, in: VaultList.defaultBase())
-            try list.save(to: VaultList.defaultFile())
-            vaults = list.vaults
+            try store.update { created = try $0.create(named: name, in: VaultList.defaultBase()) }
         }
         if let created { openRoot(created.url) }
     }
 
-    func removeVault(_ vault: Vault) { updateVaults { $0.remove(vault.id) } }
-
-    func renameVault(_ vault: Vault, to name: String) { updateVaults { $0.rename(vault.id, to: name) } }
-
     private func updateVaults(_ change: (inout VaultList) -> Void) {
-        var list = VaultList.load(from: VaultList.defaultFile())
-        change(&list)
-        do { try list.save(to: VaultList.defaultFile()) } catch { notice = error.localizedDescription }
-        vaults = list.vaults
+        do { try store.update(change) } catch { notice = error.localizedDescription }
     }
 
     func openRoot(_ url: URL) {
@@ -152,6 +152,7 @@ enum ViewMode: String { case view, edit, editPreview }
         newItem = nil
         defaults.set(url.path, forKey: "rootFolder")
         updateVaults { $0.add(folder: url) }
+        store.activePath = url.standardizedFileURL.path
         session = nil
         selection = nil
         rescan()

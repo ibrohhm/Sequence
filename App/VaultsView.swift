@@ -3,31 +3,22 @@ import StudioCore
 
 /// The vault control page: switch, add, create, rename, reveal and remove vaults.
 struct VaultsView: View {
-    @EnvironmentObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var store = VaultStore.shared
+    @AppStorage("theme") private var themeName = "light"
     @State private var creating = false
     @State private var newName = ""
     @FocusState private var nameFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Vaults").font(.system(size: 16, weight: .semibold))
-                Spacer()
-                Button("Done") { dismiss() }
-                    .buttonStyle(.plain).font(.system(size: 13, weight: .medium)).foregroundStyle(model.theme.accent)
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
-            Divider()
-            if model.vaults.isEmpty {
+            if store.vaults.isEmpty {
                 Text("No vaults yet. Create one or add a folder.")
                     .font(.system(size: 13)).foregroundStyle(.secondary).padding(16)
             } else {
                 ScrollView {
                     VStack(spacing: 2) {
-                        ForEach(model.vaults) { vault in
-                            VaultRow(vault: vault, active: vault.id == model.activeVault?.id)
+                        ForEach(store.vaults) { vault in
+                            VaultRow(vault: vault, active: vault.path == store.activePath)
                         }
                     }
                     .padding(8)
@@ -38,7 +29,8 @@ struct VaultsView: View {
             addSection.padding(16)
         }
         .frame(width: 440)
-    }
+        .preferredColorScheme((Theme(rawValue: themeName) ?? .light).colorScheme)
+            }
 
     @ViewBuilder private var addSection: some View {
         if creating {
@@ -58,7 +50,7 @@ struct VaultsView: View {
                 Button { creating = true } label: {
                     Label("New vault…", systemImage: "plus").frame(maxWidth: .infinity)
                 }
-                Button { model.chooseRoot() } label: {
+                Button { AppModel.active?.chooseRoot() } label: {
                     Label("Add folder as vault…", systemImage: "folder").frame(maxWidth: .infinity)
                 }
             }
@@ -69,7 +61,7 @@ struct VaultsView: View {
     private func create() {
         let name = newName
         stopCreating()
-        model.createVault(named: name)
+        AppModel.active?.createVault(named: name)
     }
 
     private func stopCreating() {
@@ -80,7 +72,8 @@ struct VaultsView: View {
 
 /// One vault: click to switch; the actions menu shows on hover.
 private struct VaultRow: View {
-    @EnvironmentObject var model: AppModel
+    @ObservedObject private var store = VaultStore.shared
+    @AppStorage("theme") private var themeName = "light"
     let vault: Vault
     let active: Bool
     @State private var hovering = false
@@ -88,12 +81,13 @@ private struct VaultRow: View {
     @State private var draft = ""
     @FocusState private var draftFocused: Bool
 
+    private var theme: Theme { Theme(rawValue: themeName) ?? .light }
     private var missing: Bool { !FileManager.default.fileExists(atPath: vault.path) }
 
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: active ? "folder.fill" : "folder")
-                .foregroundStyle(active ? model.theme.accent : Color.secondary).frame(width: 18)
+                .foregroundStyle(active ? theme.accent : Color.secondary).frame(width: 18)
             VStack(alignment: .leading, spacing: 1) {
                 if editing {
                     TextField("Name", text: $draft)
@@ -115,7 +109,7 @@ private struct VaultRow: View {
                 Button("Rename…") { draft = vault.name; editing = true }
                 Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([vault.url]) }
                 Divider()
-                Button("Remove from List") { model.removeVault(vault) }
+                Button("Remove from List") { try? store.update { $0.remove(vault.id) } }
             } label: {
                 Image(systemName: "ellipsis").foregroundStyle(.secondary).frame(width: 26, height: 26)
             }
@@ -123,15 +117,15 @@ private struct VaultRow: View {
             .opacity(hovering ? 1 : 0)
         }
         .padding(.horizontal, 8).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(active ? model.theme.selectedRow : (hovering ? model.theme.hoverRow : Color.clear)))
+        .background(RoundedRectangle(cornerRadius: 8).fill(active ? theme.selectedRow : (hovering ? theme.hoverRow : Color.clear)))
         .opacity(missing ? 0.6 : 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { if !editing { model.switchVault(vault) } }
+        .onTapGesture { if !editing { AppModel.active?.switchVault(vault) } }
     }
 
     private func commit() {
-        model.renameVault(vault, to: draft)
+        try? store.update { $0.rename(vault.id, to: draft) }
         editing = false
     }
 }

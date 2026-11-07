@@ -27,3 +27,32 @@ struct WindowConfigurator: NSViewRepresentable {
         }
     }
 }
+
+/// Calls `onActivate` whenever the hosting window becomes the key window.
+struct WindowActivation: NSViewRepresentable {
+    let onActivate: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ActivationView()
+        view.onActivate = onActivate
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {}
+}
+
+private final class ActivationView: NSView {
+    var onActivate: () -> Void = {}
+    private var token: NSObjectProtocol?
+
+    override func viewDidMoveToWindow() {
+        if let token { NotificationCenter.default.removeObserver(token) }
+        guard let window else { return }
+        token = NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self] _ in
+            self?.onActivate()
+        }
+        if window.isKeyWindow { onActivate() }
+    }
+
+    deinit { if let token { NotificationCenter.default.removeObserver(token) } }
+}
