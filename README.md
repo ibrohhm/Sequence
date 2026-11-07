@@ -47,7 +47,7 @@ On first launch, choose a folder. The app remembers it and the last file you ope
 | Action | Shortcut |
 |---|---|
 | New window | ⌘N |
-| Open folder | ⌘O |
+| Add folder as vault | ⌘O |
 | PlantUML playground | ⌘⇧P |
 | Markdown playground | ⌘⇧M |
 | Save | ⌘S |

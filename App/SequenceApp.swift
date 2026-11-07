@@ -16,7 +16,8 @@ private struct SequenceCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("Open Folder…") { model?.chooseRoot() }.keyboardShortcut("o").disabled(model == nil)
+            Button("Add Folder as Vault…") { model?.chooseRoot() }.keyboardShortcut("o").disabled(model == nil)
+            Button("Manage Vaults…") { model?.showVaults = true }.disabled(model == nil)
             Divider()
             Button("PlantUML Playground") { model?.openPlayground(kind: .diagram) }.keyboardShortcut("p", modifiers: [.command, .shift]).disabled(model == nil)
             Button("Markdown Playground") { model?.openPlayground(kind: .markdown) }.keyboardShortcut("m", modifiers: [.command, .shift]).disabled(model == nil)

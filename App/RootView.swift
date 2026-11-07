@@ -11,8 +11,9 @@ struct RootView: View {
                 SetupMessageView(error: error) { model.resolveTools() }
             } else if model.rootFolder == nil && !model.inPlayground {
                 VStack(spacing: 12) {
-                    Text("Choose a folder of PlantUML and markdown files").font(.title2)
-                    Button("Open Folder…") { model.chooseRoot() }
+                    Text("Choose a vault of PlantUML and markdown files").font(.title2)
+                    Button("Add Folder as Vault…") { model.chooseRoot() }
+                    Button("Manage Vaults…") { model.showVaults = true }
                     PlaygroundChoices().frame(width: 260).padding(.top, 8)
                 }
             } else {
@@ -33,6 +34,7 @@ struct RootView: View {
         .background(model.theme.frameBackground)
         .preferredColorScheme(model.theme.colorScheme)
         .background(WindowConfigurator(theme: model.theme))
+        .sheet(isPresented: $model.showVaults) { VaultsView() }
         .alert("Unsaved changes", isPresented: Binding(get: { model.pendingSelection != nil }, set: { if !$0 { model.cancelPendingSelection() } })) {
             Button("Save") { model.resolvePendingSelection(save: true) }
             Button("Discard", role: .destructive) { model.resolvePendingSelection(save: false) }

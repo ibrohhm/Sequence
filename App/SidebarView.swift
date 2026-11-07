@@ -44,13 +44,21 @@ struct SidebarView: View {
     private var header: some View {
         HStack {
             Menu {
+                ForEach(model.vaults) { vault in
+                    Button {
+                        model.switchVault(vault)
+                    } label: {
+                        if vault.id == model.activeVault?.id { Label(vault.name, systemImage: "checkmark") } else { Text(vault.name) }
+                    }
+                }
+                Divider()
+                Button("Manage Vaults…") { model.showVaults = true }
+                Divider()
                 Button("New File…") { promptText = ""; prompt = .newFile(nil) }
                 Button("New Folder…") { promptText = ""; prompt = .newFolder(nil) }
-                Divider()
-                Button("Change Folder…") { model.chooseRoot() }
             } label: {
                 HStack(spacing: 4) {
-                    Text(model.rootFolder?.lastPathComponent ?? "Folder").font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    Text(model.activeVault?.name ?? model.rootFolder?.lastPathComponent ?? "Vault").font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 }
             }

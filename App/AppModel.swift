@@ -14,6 +14,8 @@ enum ViewMode: String { case view, edit, editPreview }
 
 @MainActor final class AppModel: ObservableObject {
     @Published var rootFolder: URL?
+    @Published private(set) var vaults: [Vault] = []
+    @Published var showVaults = false
     @Published var tree: [FileNode] = []
     @Published var selection: URL?
     @Published var session: DocumentSession?
@@ -65,6 +67,7 @@ enum ViewMode: String { case view, edit, editPreview }
     init(restoreSession: Bool = true) {
         playgroundKind = defaults.string(forKey: "playgroundKind") == "markdown" ? .markdown : .diagram
         theme = Theme(rawValue: defaults.string(forKey: "theme") ?? "") ?? .light
+        vaults = VaultList.load(from: VaultList.defaultFile()).vaults
         resolveTools()
         if restoreSession, let path = defaults.string(forKey: "rootFolder"), FileManager.default.fileExists(atPath: path) {
             openRoot(URL(fileURLWithPath: path))
@@ -89,12 +92,42 @@ enum ViewMode: String { case view, edit, editPreview }
         }
     }
 
+    /// The vault whose folder is open.
+    var activeVault: Vault? { vaults.first { $0.path == rootFolder?.standardizedFileURL.path } }
+
     func chooseRoot() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.prompt = "Open Folder"
+        panel.prompt = "Use as Vault"
         if panel.runModal() == .OK, let url = panel.url { openRoot(url) }
+    }
+
+    func switchVault(_ vault: Vault) {
+        guard FileManager.default.fileExists(atPath: vault.path) else { notice = "\(vault.name) is missing from disk."; return }
+        openRoot(vault.url)
+    }
+
+    func createVault(named name: String) {
+        var created: Vault?
+        perform {
+            var list = VaultList.load(from: VaultList.defaultFile())
+            created = try list.create(named: name, in: VaultList.defaultBase())
+            try list.save(to: VaultList.defaultFile())
+            vaults = list.vaults
+        }
+        if let created { openRoot(created.url) }
+    }
+
+    func removeVault(_ vault: Vault) { updateVaults { $0.remove(vault.id) } }
+
+    func renameVault(_ vault: Vault, to name: String) { updateVaults { $0.rename(vault.id, to: name) } }
+
+    private func updateVaults(_ change: (inout VaultList) -> Void) {
+        var list = VaultList.load(from: VaultList.defaultFile())
+        change(&list)
+        do { try list.save(to: VaultList.defaultFile()) } catch { notice = error.localizedDescription }
+        vaults = list.vaults
     }
 
     func openRoot(_ url: URL) {
@@ -104,6 +137,7 @@ enum ViewMode: String { case view, edit, editPreview }
         }
         rootFolder = url
         defaults.set(url.path, forKey: "rootFolder")
+        updateVaults { $0.add(folder: url) }
         session = nil
         selection = nil
         rescan()
