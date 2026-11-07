@@ -2,6 +2,7 @@
 # Builds Sequence.app (unsigned, personal use) from the SwiftPM executable; no Xcode needed.
 set -e
 cd "$(dirname "$0")"
+VERSION=$(tr -d "[:space:]" < VERSION)
 swift build -c release
 APP=build/Sequence.app
 rm -rf "$APP"
@@ -28,8 +29,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <key>CFBundleExecutable</key><string>Sequence</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>CFBundleVersion</key><string>$VERSION</string>
+<key>CFBundleShortVersionString</key><string>$VERSION</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>NSHighResolutionCapable</key><true/>
