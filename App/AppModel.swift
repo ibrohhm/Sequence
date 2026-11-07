@@ -10,6 +10,14 @@ struct FindRequest {
     let advance: Bool
 }
 
+enum NewItemKind { case file, folder }
+
+/// A new file or folder being named in the sidebar.
+struct NewItem: Equatable {
+    let kind: NewItemKind
+    let parent: URL
+}
+
 enum ViewMode: String { case view, edit, editPreview }
 
 @MainActor final class AppModel: ObservableObject {
@@ -22,6 +30,9 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var mode: ViewMode = .view
     @Published var showSidebar = true
     @Published var query = ""
+    @Published var searching = false
+    @Published var sidebarFocus: URL?
+    @Published var newItem: NewItem?
     @Published var findQuery = ""
     @Published private(set) var findFocusTick = 0
     @Published private(set) var promptFocusTick = 0
@@ -137,6 +148,8 @@ enum ViewMode: String { case view, edit, editPreview }
             return
         }
         rootFolder = url
+        sidebarFocus = nil
+        newItem = nil
         defaults.set(url.path, forKey: "rootFolder")
         updateVaults { $0.add(folder: url) }
         session = nil
@@ -366,6 +379,34 @@ enum ViewMode: String { case view, edit, editPreview }
     }
 
     // MARK: sidebar operations
+
+    /// Starts naming a new file or folder in `folder`, else in the focused folder, else in the root.
+    func beginNew(_ kind: NewItemKind, in folder: URL? = nil) {
+        guard let rootFolder else { notice = "Add a vault first."; return }
+        closePlayground()
+        showSidebar = true
+        searching = false
+        query = ""
+        newItem = NewItem(kind: kind, parent: folder ?? LibraryOperations.targetFolder(for: sidebarFocus, root: rootFolder))
+    }
+
+    /// Creates the item being named, or drops it when the name is empty.
+    func commitNewItem(named name: String) {
+        guard let item = newItem else { return }
+        newItem = nil
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        switch item.kind {
+        case .file: createFile(named: name, in: item.parent)
+        case .folder: createFolder(named: name, in: item.parent)
+        }
+    }
+
+    func toggleSearch() {
+        closePlayground()
+        showSidebar = true
+        searching.toggle()
+        query = ""
+    }
 
     func createFile(named name: String, in folder: URL?) {
         guard let target = folder ?? rootFolder else { notice = "Open a folder first."; return }

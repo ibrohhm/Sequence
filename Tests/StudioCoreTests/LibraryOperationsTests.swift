@@ -72,3 +72,37 @@ private func tempFolder() throws -> URL {
         #expect(try String(contentsOf: url, encoding: .utf8).hasPrefix("# "))
     }
 }
+
+@Suite struct NewItemTargetTests {
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nt \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.resolvingSymlinksInPath()
+    }
+
+    @Test func nothingSelectedTargetsTheRoot() throws {
+        let root = try tempDir()
+        #expect(LibraryOperations.targetFolder(for: nil, root: root) == root)
+    }
+
+    @Test func aSelectedFolderTargetsItself() throws {
+        let root = try tempDir()
+        let folder = root.appendingPathComponent("sub")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        #expect(LibraryOperations.targetFolder(for: folder, root: root) == folder)
+    }
+
+    @Test func aSelectedFileTargetsItsFolder() throws {
+        let root = try tempDir()
+        let folder = root.appendingPathComponent("sub")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appendingPathComponent("a.puml")
+        try "x".write(to: file, atomically: true, encoding: .utf8)
+        #expect(LibraryOperations.targetFolder(for: file, root: root).path == folder.path)
+    }
+
+    @Test func aMissingSelectionFallsBackToTheRoot() throws {
+        let root = try tempDir()
+        #expect(LibraryOperations.targetFolder(for: root.appendingPathComponent("gone.puml"), root: root) == root)
+    }
+}

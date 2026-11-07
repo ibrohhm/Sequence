@@ -33,6 +33,14 @@ public enum LibraryOperations {
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
     }
 
+    /// The folder a new item goes in: the focused folder, the folder of a focused file, else the root.
+    public static func targetFolder(for focus: URL?, root: URL) -> URL {
+        guard let focus else { return root }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: focus.path, isDirectory: &isDirectory) else { return root }
+        return isDirectory.boolValue ? focus : focus.deletingLastPathComponent()
+    }
+
     private static func validated(_ name: String) throws -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !trimmed.contains("/"), !trimmed.hasPrefix(".") else { throw LibraryOperationError.invalidName }
