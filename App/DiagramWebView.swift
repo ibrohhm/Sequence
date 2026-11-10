@@ -4,7 +4,7 @@ import Combine
 
 /// A web view whose right-click menu holds only Copy Image, and only when the click lands on a diagram.
 final class DiagramWebView: WKWebView {
-    private var hitRect: CGRect?
+    private var onDiagram = false
     var zoomsOnPinch = false
     private var finds: AnyCancellable?
 
@@ -34,40 +34,63 @@ final class DiagramWebView: WKWebView {
     }
 
     private static let script = """
+    window.__sequenceSvg = null;
     document.addEventListener('contextmenu', function (e) {
       var s = e.target && e.target.closest ? e.target.closest('svg') : null;
-      var msg = {};
-      if (s) { var r = s.getBoundingClientRect(); msg = { x: r.x, y: r.y, width: r.width, height: r.height }; }
-      window.webkit.messageHandlers.diagramContext.postMessage(msg);
+      window.__sequenceSvg = s;
+      window.webkit.messageHandlers.diagramContext.postMessage(s ? true : false);
     }, true);
+    window.__sequenceCopy = function () {
+      var s = window.__sequenceSvg;
+      if (!s) return Promise.resolve(null);
+      var r = s.getBoundingClientRect();
+      var clone = s.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      clone.setAttribute('width', r.width);
+      clone.setAttribute('height', r.height);
+      var url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+      return new Promise(function (resolve) {
+        var img = new Image();
+        img.onload = function () {
+          var scale = 2;
+          var c = document.createElement('canvas');
+          c.width = Math.ceil(r.width * scale);
+          c.height = Math.ceil(r.height * scale);
+          var g = c.getContext('2d');
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, c.width, c.height);
+          g.drawImage(img, 0, 0, c.width, c.height);
+          resolve(c.toDataURL('image/png').split(',')[1]);
+        };
+        img.onerror = function () { resolve(null); };
+        img.src = url;
+      });
+    };
     """
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         super.willOpenMenu(menu, with: event)
         menu.removeAllItems()
-        guard hitRect != nil else { return }
+        guard onDiagram else { return }
         let copyImage = NSMenuItem(title: "Copy Image", action: #selector(copyImage), keyEquivalent: "")
         copyImage.target = self
         menu.addItem(copyImage)
     }
 
     @objc private func copyImage() {
-        guard let hitRect else { return }
-        let configuration = WKSnapshotConfiguration()
-        configuration.rect = hitRect
-        configuration.afterScreenUpdates = true
-        takeSnapshot(with: configuration) { image, _ in
-            guard let image else { return }
+        callAsyncJavaScript("return await window.__sequenceCopy();", arguments: [:], in: nil, in: .page) { result in
+            guard case .success(let value) = result,
+                  let base64 = value as? String,
+                  let data = Data(base64Encoded: base64),
+                  let image = NSImage(data: data)
+            else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.writeObjects([image])
         }
     }
 
     fileprivate func setHit(_ body: Any) {
-        guard let d = body as? [String: Any],
-              let x = d["x"] as? Double, let y = d["y"] as? Double, let w = d["width"] as? Double, let h = d["height"] as? Double
-        else { hitRect = nil; return }
-        hitRect = CGRect(x: x, y: y, width: w, height: h)
+        onDiagram = (body as? Bool) ?? false
     }
 
     private final class Router: NSObject, WKScriptMessageHandler {
