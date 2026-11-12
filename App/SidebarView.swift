@@ -131,6 +131,8 @@ private struct TreeRow<Menu: View>: View {
     let depth: Int
     var startsExpanded = false
     @ViewBuilder let menu: (FileNode) -> Menu
+    @AppStorage("showFolderIcons") private var showFolderIcons = true
+    @AppStorage("showFileIcons") private var showFileIcons = true
     @State private var expanded = false
     @State private var hovering = false
 
@@ -147,11 +149,11 @@ private struct TreeRow<Menu: View>: View {
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                         .frame(width: 12)
-                    Image(systemName: expanded ? "folder.fill" : "folder").foregroundStyle(.secondary).frame(width: 16)
+                    if showFolderIcons { Image(systemName: expanded ? "folder.fill" : "folder").foregroundStyle(.secondary).frame(width: 16) }
                     Text(node.name).lineLimit(1)
                 } else {
                     Color.clear.frame(width: 12, height: 1)
-                    Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 16)
+                    if showFileIcons { Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 16) }
                     Text(node.name).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -196,13 +198,17 @@ private struct DraftRow: View {
     @EnvironmentObject var model: AppModel
     let kind: NewItemKind
     var depth = 0
+    @AppStorage("showFolderIcons") private var showFolderIcons = true
+    @AppStorage("showFileIcons") private var showFileIcons = true
     @State private var name = ""
     @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
             Color.clear.frame(width: 12, height: 1)
-            Image(systemName: kind == .folder ? "folder" : "doc.text").foregroundStyle(.secondary).frame(width: 16)
+            if kind == .folder ? showFolderIcons : showFileIcons {
+                Image(systemName: kind == .folder ? "folder" : "doc.text").foregroundStyle(.secondary).frame(width: 16)
+            }
             TextField(kind == .folder ? "Folder name" : "File name", text: $name)
                 .textFieldStyle(.plain).focused($focused)
                 .onSubmit { model.commitNewItem(named: name) }

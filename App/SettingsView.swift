@@ -21,6 +21,8 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @AppStorage("theme") private var theme = "light"
     @AppStorage("aiEditorEnabled") private var aiEnabled = true
+    @AppStorage("showFolderIcons") private var showFolderIcons = true
+    @AppStorage("showFileIcons") private var showFileIcons = true
 
     var body: some View {
         Form {
@@ -29,6 +31,10 @@ private struct GeneralSettings: View {
                     themeButton(.light, symbol: "sun.max")
                     themeButton(.dark, symbol: "moon")
                 }
+            }
+            Section("Sidebar") {
+                Toggle("Show folder icons", isOn: $showFolderIcons)
+                Toggle("Show file icons", isOn: $showFileIcons)
             }
             Section {
                 Toggle("Show AI editor", isOn: $aiEnabled)
