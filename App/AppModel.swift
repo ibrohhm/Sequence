@@ -31,6 +31,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var searching = false
     @Published var sidebarFocus: URL?
     @Published var newItem: NewItem?
+    @Published private(set) var expansion = FolderExpansion()
     @Published var findQuery = ""
     @Published private(set) var findFocusTick = 0
     @Published private(set) var promptFocusTick = 0
@@ -162,6 +163,7 @@ enum ViewMode: String { case view, edit, editPreview }
         rootFolder = url
         sidebarFocus = nil
         newItem = nil
+        expansion = FolderExpansion(states: savedExpansion[url.standardizedFileURL.path] ?? [:])
         defaults.set(url.path, forKey: "rootFolder")
         updateVaults { $0.add(folder: url) }
         store.activePath = url.standardizedFileURL.path
@@ -172,6 +174,26 @@ enum ViewMode: String { case view, edit, editPreview }
         watcher = FolderWatcher(root: url) { [weak self] in
             Task { @MainActor in self?.folderChanged() }
         }
+    }
+
+    private var savedExpansion: [String: [String: Bool]] {
+        defaults.dictionary(forKey: "folderExpansion") as? [String: [String: Bool]] ?? [:]
+    }
+
+    private func saveExpansion() {
+        guard let root = rootFolder?.standardizedFileURL.path else { return }
+        var all = savedExpansion
+        all[root] = expansion.states
+        defaults.set(all, forKey: "folderExpansion")
+    }
+
+    func isExpanded(_ folder: URL, default fallback: Bool) -> Bool {
+        expansion.isExpanded(folder.standardizedFileURL.path, default: fallback)
+    }
+
+    func setExpanded(_ folder: URL, _ expanded: Bool) {
+        expansion.set(folder.standardizedFileURL.path, expanded: expanded)
+        saveExpansion()
     }
 
     func rescan() {
@@ -486,6 +508,25 @@ enum ViewMode: String { case view, edit, editPreview }
         }
     }
 
+    /// Moves dropped items from this vault into `folder`; anything outside the vault is ignored.
+    func move(_ urls: [URL], into folder: URL) {
+        guard let root = rootFolder?.standardizedFileURL.path else { return }
+        for url in urls where url.standardizedFileURL.path.hasPrefix(root + "/") {
+            perform {
+                let moved = try LibraryOperations.move(url, into: folder)
+                guard moved != url else { return }
+                expansion.remap(from: url.standardizedFileURL.path, to: moved.standardizedFileURL.path)
+                if let open = session?.url, let new = LibraryOperations.relocated(open, from: url, to: moved) {
+                    session?.relocate(to: new)
+                    selection = new
+                    defaults.set(new.path, forKey: "lastFile")
+                }
+                setExpanded(folder, true)
+            }
+        }
+        rescan()
+    }
+
     func delete(_ url: URL) {
         perform {
             try LibraryOperations.delete(url)
@@ -497,6 +538,7 @@ enum ViewMode: String { case view, edit, editPreview }
     private func perform(_ work: () throws -> Void) {
         do { try work() } catch LibraryOperationError.alreadyExists { notice = "That name already exists." }
         catch LibraryOperationError.invalidName { notice = "That name is not valid." }
+        catch LibraryOperationError.invalidMove { notice = "A folder cannot move into itself." }
         catch { notice = error.localizedDescription }
     }
 }

@@ -24,6 +24,11 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity, minHeight: 300, alignment: .topLeading)
                     .contentShape(Rectangle())
                     .onTapGesture { model.sidebarFocus = nil }
+                    .dropDestination(for: URL.self) { urls, _ in
+                        guard let root = model.rootFolder else { return false }
+                        model.move(urls, into: root)
+                        return true
+                    }
             }
         }
         .onChange(of: model.searching) { _, on in searchFocused = on }
@@ -52,7 +57,6 @@ struct SidebarView: View {
                 Divider()
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "folder.fill").font(.system(size: 12)).foregroundStyle(model.theme.accent)
                     Text(model.activeVault?.name ?? model.rootFolder?.lastPathComponent ?? "Vault").font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                 }
@@ -133,9 +137,14 @@ private struct TreeRow<Menu: View>: View {
     @ViewBuilder let menu: (FileNode) -> Menu
     @AppStorage("showFolderIcons") private var showFolderIcons = true
     @AppStorage("showFileIcons") private var showFileIcons = true
-    @State private var expanded = false
     @State private var hovering = false
+    @State private var dropTargeted = false
 
+    private var expanded: Bool {
+        let opensForSelection = model.selection.map { $0.path.hasPrefix(node.id.path + "/") } ?? false
+        return model.isExpanded(node.id, default: startsExpanded || receivesNewItem || opensForSelection)
+    }
+    private var dropFolder: URL { node.isDirectory ? node.id : node.id.deletingLastPathComponent() }
     private var isSelected: Bool { !node.isDirectory && model.selection == node.id }
     private var isFocusedFolder: Bool { node.isDirectory && model.sidebarFocus == node.id }
     private var receivesNewItem: Bool { model.newItem?.parent.standardizedFileURL.path == node.id.standardizedFileURL.path }
@@ -162,13 +171,18 @@ private struct TreeRow<Menu: View>: View {
             .padding(.vertical, 5)
             .padding(.leading, 8 + CGFloat(depth) * 14)
             .padding(.trailing, 8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? model.theme.selectedRow : (hovering || isFocusedFolder ? model.theme.hoverRow : Color.clear)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? model.theme.selectedRow : (hovering || isFocusedFolder || dropTargeted ? model.theme.hoverRow : Color.clear)))
             .contentShape(Rectangle())
             .onHover { hovering = $0 }
             .onTapGesture {
                 model.sidebarFocus = node.id
-                if node.isDirectory { withAnimation(.easeOut(duration: 0.12)) { expanded.toggle() } } else { model.select(node.id) }
+                if node.isDirectory { withAnimation(.easeOut(duration: 0.12)) { model.setExpanded(node.id, !expanded) } } else { model.select(node.id) }
             }
+            .draggable(node.id)
+            .dropDestination(for: URL.self) { urls, _ in
+                model.move(urls, into: dropFolder)
+                return true
+            } isTargeted: { dropTargeted = $0 }
             .contextMenu { menu(node) }
 
             if expanded, let children = node.children {
@@ -184,11 +198,7 @@ private struct TreeRow<Menu: View>: View {
             }
         }
         .onChange(of: model.newItem) { _, item in
-            if item?.parent.standardizedFileURL.path == node.id.standardizedFileURL.path { expanded = true }
-        }
-        .onAppear {
-            if startsExpanded || receivesNewItem { expanded = true }
-            if let selection = model.selection, selection.path.hasPrefix(node.id.path + "/") { expanded = true }
+            if item?.parent.standardizedFileURL.path == node.id.standardizedFileURL.path { model.setExpanded(node.id, true) }
         }
     }
 }

@@ -106,3 +106,56 @@ private func tempFolder() throws -> URL {
         #expect(LibraryOperations.targetFolder(for: root.appendingPathComponent("gone.puml"), root: root) == root)
     }
 }
+
+@Suite struct LibraryMoveTests {
+    @Test func moveFileIntoFolder() throws {
+        let root = try tempFolder()
+        let file = try LibraryOperations.createFile(named: "a", in: root)
+        let folder = try LibraryOperations.createFolder(named: "rfc", in: root)
+        let moved = try LibraryOperations.move(file, into: folder)
+        #expect(moved.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL)
+        #expect(FileManager.default.fileExists(atPath: moved.path))
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func moveFolderKeepsItsContents() throws {
+        let root = try tempFolder()
+        let src = try LibraryOperations.createFolder(named: "src", in: root)
+        let inner = try LibraryOperations.createFile(named: "x", in: src)
+        let dest = try LibraryOperations.createFolder(named: "dest", in: root)
+        let moved = try LibraryOperations.move(src, into: dest)
+        #expect(FileManager.default.fileExists(atPath: moved.appendingPathComponent(inner.lastPathComponent).path))
+    }
+
+    @Test func moveIntoSameParentDoesNothing() throws {
+        let root = try tempFolder()
+        let file = try LibraryOperations.createFile(named: "a", in: root)
+        #expect(try LibraryOperations.move(file, into: root) == file)
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func moveFolderIntoItselfOrDescendantIsRejected() throws {
+        let root = try tempFolder()
+        let outer = try LibraryOperations.createFolder(named: "outer", in: root)
+        let inner = try LibraryOperations.createFolder(named: "inner", in: outer)
+        #expect(throws: LibraryOperationError.invalidMove) { try LibraryOperations.move(outer, into: outer) }
+        #expect(throws: LibraryOperationError.invalidMove) { try LibraryOperations.move(outer, into: inner) }
+    }
+
+    @Test func moveRejectsNameClash() throws {
+        let root = try tempFolder()
+        let file = try LibraryOperations.createFile(named: "a", in: root)
+        let folder = try LibraryOperations.createFolder(named: "f", in: root)
+        _ = try LibraryOperations.createFile(named: "a", in: folder)
+        #expect(throws: LibraryOperationError.alreadyExists) { try LibraryOperations.move(file, into: folder) }
+        #expect(FileManager.default.fileExists(atPath: file.path))
+    }
+
+    @Test func relocatedMapsPathsInsideAMovedFolder() {
+        let old = URL(fileURLWithPath: "/v/a")
+        let new = URL(fileURLWithPath: "/v/b/a")
+        #expect(LibraryOperations.relocated(URL(fileURLWithPath: "/v/a"), from: old, to: new) == new)
+        #expect(LibraryOperations.relocated(URL(fileURLWithPath: "/v/a/x.puml"), from: old, to: new)?.path == "/v/b/a/x.puml")
+        #expect(LibraryOperations.relocated(URL(fileURLWithPath: "/v/ab/x.puml"), from: old, to: new) == nil)
+    }
+}

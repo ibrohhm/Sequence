@@ -1,6 +1,6 @@
 import Foundation
 
-public enum LibraryOperationError: Error, Equatable { case alreadyExists, invalidName }
+public enum LibraryOperationError: Error, Equatable { case alreadyExists, invalidName, invalidMove }
 
 public enum LibraryOperations {
     /// Creates a starter file, adding `.puml` when `named` has no supported extension.
@@ -26,6 +26,26 @@ public enum LibraryOperations {
         guard !FileManager.default.fileExists(atPath: target.path) else { throw LibraryOperationError.alreadyExists }
         try FileManager.default.moveItem(at: url, to: target)
         return target
+    }
+
+    /// Moves a file or folder into `folder`; a move into its current parent changes nothing.
+    public static func move(_ url: URL, into folder: URL) throws -> URL {
+        let source = url.standardizedFileURL.path
+        let destination = folder.standardizedFileURL.path
+        guard destination != source, !destination.hasPrefix(source + "/") else { throw LibraryOperationError.invalidMove }
+        guard url.deletingLastPathComponent().standardizedFileURL.path != destination else { return url }
+        let target = folder.appendingPathComponent(url.lastPathComponent)
+        guard !FileManager.default.fileExists(atPath: target.path) else { throw LibraryOperationError.alreadyExists }
+        try FileManager.default.moveItem(at: url, to: target)
+        return target
+    }
+
+    /// Where `url` ends up after `old` moved to `new`, or nil when `url` is not `old` or inside it.
+    public static func relocated(_ url: URL, from old: URL, to new: URL) -> URL? {
+        let path = url.standardizedFileURL.path, oldPath = old.standardizedFileURL.path
+        if path == oldPath { return new }
+        guard path.hasPrefix(oldPath + "/") else { return nil }
+        return URL(fileURLWithPath: new.standardizedFileURL.path + path.dropFirst(oldPath.count))
     }
 
     /// Moves the item to the Trash.
