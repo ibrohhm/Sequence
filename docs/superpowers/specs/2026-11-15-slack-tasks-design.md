@@ -123,3 +123,13 @@ Table `tasks`:
 - Exact DDL text and index choices; keeping the Swift and TypeScript DDL identical (a test in each suite that checks the schema).
 - Timestamp formats, the `quiet` threshold constant, and the board's look (card size, column widths, drag mechanics; the sidebar already uses `.draggable` / `.dropDestination`).
 - How the board refreshes, and where the sync instructions live.
+
+## Addendum: summary and next action (approved by the user)
+
+The user asked for a short summary of each thread and a next action. This reverses the earlier non-goal "no AI summaries": the sync agent already reads each thread through the Workbench, so no Slack text goes anywhere new; the app itself never generates summaries.
+
+- **Schema v2:** three nullable columns on `tasks`: `summary TEXT`, `next_action TEXT`, `summary_replies INTEGER` (the reply count the summary covers). `user_version` becomes 2. An existing v1 database is upgraded in place by whichever program opens it first (Node or Swift): inside `BEGIN IMMEDIATE`, add each missing column (checked with `PRAGMA table_info`), then set `user_version = 2`. The DDL text for a fresh database stays identical in both programs (parity test).
+- **`upsert_slack_task`:** new optional `summary` (non-empty, at most 300 characters) and `next_action` (non-empty, at most 200 characters; allowed only together with `summary`). When `summary` is given it sets `summary`, `next_action` (NULL if omitted) and `summary_replies = replies`. Every result gains `summary_stale: boolean`: true when the row has no summary or `summary_replies` differs from `replies`; false for archived rows (nothing is written). Facts, `status`, `archived` and `tagged` behave exactly as before.
+- **Skill:** after the facts call, if `summary_stale` is true the agent writes a summary (about 140 characters: where the thread stands now) and a next action (about 100 characters: what the user should do or wait for), in the thread's language, and calls the tool again with the same facts plus both texts. Threads with a current summary cost nothing.
+- **Board:** a card shows `summary` (falling back to the first message) and, when present, a `→ next action` line. The app only reads these columns.
+- **Not included:** automatic sync; summaries written by the app.

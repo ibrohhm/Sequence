@@ -39,7 +39,7 @@ export function buildServer(): McpServer {
 
   tool(
     "upsert_slack_task",
-    "Create or update a Slack thread card in the Sequence tasks database. Keeps status and archived; skips archived threads. Pass the thread's first message as snippet and the reply count.",
+    "Create or update a Slack thread card in the Sequence tasks database. Keeps status and archived; skips archived threads. Pass the thread's first message as snippet and the reply count. The result has summary_stale: when true, call again with summary and next_action.",
     {
       channel_id: z.string(),
       message_ts: z.string().describe("ts of the message that was tagged"),
@@ -49,6 +49,8 @@ export function buildServer(): McpServer {
       snippet: z.string(),
       replies: z.number().int().min(0),
       last_reply: z.string().describe("Slack ts or ISO time of the last message in the thread"),
+      summary: z.string().max(300).optional().describe("Where the thread stands now, about 140 characters; send only when summary_stale was true"),
+      next_action: z.string().max(200).optional().describe("What the user should do or wait for, about 100 characters; needs summary"),
     },
     async (_vaults, a) => {
       const db = openDb();

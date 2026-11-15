@@ -98,3 +98,19 @@ test("upsert_slack_task with bad input returns an error and the server stays ali
     await client.close();
   }
 });
+
+test("upsert_slack_task reports summary_stale then accepts a summary", async () => {
+  const db = join(await mkdtemp(join(tmpdir(), "srv-db-")), "slack-tasks.db");
+  const client = await connect(await vaultsFile([]), db);
+  try {
+    const first = JSON.parse(text(await client.callTool({ name: "upsert_slack_task", arguments: SLACK })));
+    assert.equal(first.summary_stale, true);
+    const second = JSON.parse(text(await client.callTool({
+      name: "upsert_slack_task",
+      arguments: { ...SLACK, summary: "Waiting on vendor.", next_action: "Ping vendor on Monday" },
+    })));
+    assert.equal(second.summary_stale, false);
+  } finally {
+    await client.close();
+  }
+});

@@ -9,9 +9,11 @@ export type UpsertInput = {
   snippet: string;
   replies: number;
   last_reply: string;
+  summary?: string;
+  next_action?: string;
 };
 
-export type UpsertResult = { action: "created" | "updated" | "archived"; channel_id: string; thread_ts: string };
+export type UpsertResult = { action: "created" | "updated" | "archived"; channel_id: string; thread_ts: string; summary_stale: boolean };
 
 type Row = { archived: number } | undefined;
 
@@ -38,6 +40,15 @@ function validate(input: UpsertInput): URL {
   if (!SLACK_TS.test(input.message_ts)) throw new Error(`message_ts must look like 1794536057.965929: ${input.message_ts}`);
   if (typeof input.snippet !== "string") throw new Error("snippet must be a string");
   if (!Number.isInteger(input.replies) || input.replies < 0) throw new Error("replies must be a non-negative integer");
+  if (input.summary !== undefined && (typeof input.summary !== "string" || input.summary.trim() === "" || input.summary.length > 300)) {
+    throw new Error("summary must be a non-empty string of at most 300 characters");
+  }
+  if (input.next_action !== undefined) {
+    if (input.summary === undefined) throw new Error("next_action needs a summary");
+    if (typeof input.next_action !== "string" || input.next_action.trim() === "" || input.next_action.length > 200) {
+      throw new Error("next_action must be a non-empty string of at most 200 characters");
+    }
+  }
   try {
     return new URL(input.permalink);
   } catch {
@@ -53,7 +64,9 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
   const root = `${link.origin}/archives/${input.channel_id}/p${threadTs.replace(".", "")}`;
   const channel = input.channel_id;
   const synced = iso(now);
-  const result = (action: UpsertResult["action"], ts: string): UpsertResult => ({ action, channel_id: channel, thread_ts: ts });
+  const result = (action: UpsertResult["action"], ts: string, stale = false): UpsertResult => ({ action, channel_id: channel, thread_ts: ts, summary_stale: stale });
+  const stale = (ts: string) =>
+    (db.prepare("SELECT (summary IS NULL OR summary_replies IS NOT replies) AS stale FROM tasks WHERE channel_id = ? AND thread_ts = ?").get(channel, ts) as { stale: number }).stale === 1;
 
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -75,17 +88,24 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
       return result("archived", threadTs);
     }
     if (row) {
+      const withSummary = input.summary !== undefined;
       db.prepare(`UPDATE tasks SET permalink = ?, channel_name = ?, snippet = ?, replies = ?, last_reply = ?, synced = ?,
-                  replies_at_tag = COALESCE(replies_at_tag, ?) WHERE channel_id = ? AND thread_ts = ?`)
-        .run(root, input.channel_name, input.snippet, input.replies, lastReply, synced, input.replies, channel, threadTs);
+                  replies_at_tag = COALESCE(replies_at_tag, ?)${withSummary ? ", summary = ?, next_action = ?, summary_replies = ?" : ""}
+                  WHERE channel_id = ? AND thread_ts = ?`)
+        .run(root, input.channel_name, input.snippet, input.replies, lastReply, synced, input.replies,
+          ...(withSummary ? [input.summary!, input.next_action ?? null, input.replies] : []), channel, threadTs);
+      const isStale = stale(threadTs);
       db.exec("COMMIT");
-      return result("updated", threadTs);
+      return result("updated", threadTs, isStale);
     }
-    db.prepare(`INSERT INTO tasks (channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(channel, threadTs, root, input.channel_name, input.snippet, input.replies, input.replies, lastReply, iso(now).slice(0, 10), synced);
+    db.prepare(`INSERT INTO tasks (channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced,
+                                   summary, next_action, summary_replies)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(channel, threadTs, root, input.channel_name, input.snippet, input.replies, input.replies, lastReply, iso(now).slice(0, 10), synced,
+        input.summary ?? null, input.summary !== undefined ? (input.next_action ?? null) : null, input.summary !== undefined ? input.replies : null);
+    const isStale = stale(threadTs);
     db.exec("COMMIT");
-    return result("created", threadTs);
+    return result("created", threadTs, isStale);
   } catch (e) {
     db.exec("ROLLBACK");
     throw e;

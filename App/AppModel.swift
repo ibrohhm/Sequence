@@ -27,6 +27,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var session: DocumentSession?
     @Published var mode: ViewMode = .view
     @Published var showSidebar = true
+    @Published var showTasks = false
     @Published var query = ""
     @Published var searching = false
     @Published var sidebarFocus: URL?
@@ -280,6 +281,7 @@ enum ViewMode: String { case view, edit, editPreview }
 
     func select(_ url: URL?) {
         guard let url, LibraryScanner.extensions.contains(url.pathExtension.lowercased()) else { return }
+        showTasks = false
         if inPlayground, session?.isDirty == true { save() }
         if let current = session, current.isDirty, current.url != url {
             pendingSelection = url
@@ -419,6 +421,7 @@ enum ViewMode: String { case view, edit, editPreview }
     func beginNew(_ kind: NewItemKind, in folder: URL? = nil) {
         guard let rootFolder else { notice = "Add a vault first."; return }
         closePlayground()
+        showTasks = false
         showSidebar = true
         searching = false
         query = ""
@@ -438,6 +441,7 @@ enum ViewMode: String { case view, edit, editPreview }
 
     func toggleSearch() {
         closePlayground()
+        showTasks = false
         showSidebar = true
         searching.toggle()
         query = ""
@@ -462,11 +466,18 @@ enum ViewMode: String { case view, edit, editPreview }
 
     /// Opens the scratch editor for `kind` (the last one used by default). Its text is kept between launches.
     func openPlayground(kind: DocumentKind? = nil) {
+        showTasks = false
         guard let url = try? Playground.ensureFile(for: kind ?? playgroundKind, in: playgroundDirectory) else {
             notice = "Could not open the playground."
             return
         }
         select(url)
+    }
+
+    /// Shows the Slack tasks board in place of the file detail.
+    func openTasks() {
+        if inPlayground { closePlayground() }
+        showTasks = true
     }
 
     /// Leaves the playground and returns to the file list with nothing open.

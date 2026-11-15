@@ -153,3 +153,65 @@ test("last_reply accepts a Slack ts, an integer ts and ISO with a zone, and reje
   }
   assert.equal(rows(db).length, 0);
 });
+
+const SUMMARY = { summary: "Vendor confirmed the retry window; fix in review.", next_action: "Check the fix PR and reply to Nafis" };
+
+test("without a summary the result is stale", async () => {
+  const { db } = await fresh();
+  assert.equal(upsertSlackTask(db, BASE, NOW).summary_stale, true);
+});
+
+test("with a summary it is current and the row holds both texts", async () => {
+  const { db } = await fresh();
+  const r = upsertSlackTask(db, { ...BASE, ...SUMMARY }, NOW);
+  assert.equal(r.summary_stale, false);
+  const [row] = rows(db);
+  assert.equal(row.summary, SUMMARY.summary);
+  assert.equal(row.next_action, SUMMARY.next_action);
+  assert.equal(row.summary_replies, 0);
+});
+
+test("new replies make it stale but keep the old text", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, { ...BASE, ...SUMMARY }, NOW);
+  const r = upsertSlackTask(db, { ...BASE, replies: 3 }, NOW);
+  assert.equal(r.summary_stale, true);
+  const [row] = rows(db);
+  assert.equal(row.summary, SUMMARY.summary);
+  assert.equal(row.summary_replies, 0);
+});
+
+test("a second call with the same replies stays current", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, { ...BASE, ...SUMMARY }, NOW);
+  assert.equal(upsertSlackTask(db, BASE, NOW).summary_stale, false);
+});
+
+test("a summary without a next action stores NULL for it", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, { ...BASE, summary: "Done and dusted." }, NOW);
+  assert.equal(rows(db)[0].next_action, null);
+});
+
+test("rejects a next action without a summary, over-long or empty texts, and writes nothing", async () => {
+  const { db } = await fresh();
+  const bad: Partial<UpsertInput>[] = [
+    { next_action: "Do it" },
+    { summary: "x".repeat(301) },
+    { summary: "ok", next_action: "y".repeat(201) },
+    { summary: "" },
+    { summary: "ok", next_action: "" },
+  ];
+  for (const b of bad) assert.throws(() => upsertSlackTask(db, { ...BASE, ...b }, NOW), Error);
+  assert.equal(rows(db).length, 0);
+});
+
+test("an archived row reports summary_stale false and writes nothing", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, BASE, NOW);
+  db.exec("UPDATE tasks SET archived = 1");
+  const r = upsertSlackTask(db, { ...BASE, ...SUMMARY }, NOW);
+  assert.equal(r.action, "archived");
+  assert.equal(r.summary_stale, false);
+  assert.equal(rows(db)[0].summary, null);
+});
