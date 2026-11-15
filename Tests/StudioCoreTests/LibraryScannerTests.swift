@@ -53,4 +53,20 @@ private func touch(_ root: URL, _ path: String) throws {
     @Test func scanOfEmptyFolderIsEmpty() throws {
         #expect(try LibraryScanner.scan(try tempRoot()).isEmpty)
     }
+
+    @Test func scanKeepsAnEmptyFolderSoANewFolderDoesNotVanish() throws {
+        let root = try tempRoot()
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("qris/new"), withIntermediateDirectories: true)
+        try touch(root, "qris/a.puml")
+        let tree = try LibraryScanner.scan(root)
+        #expect(tree[0].children?.map(\.name) == ["new", "a.puml"])
+        #expect(tree[0].children?[0].isDirectory == true)
+    }
+
+    @Test func scanStillOmitsFoldersHoldingOnlyUnsupportedItems() throws {
+        let root = try tempRoot()
+        try touch(root, "assets/logo.png"); try touch(root, "deps/pkg/index.js")
+        try FileManager.default.createDirectory(at: root.appendingPathComponent("empty"), withIntermediateDirectories: true)
+        #expect(try LibraryScanner.scan(root).map(\.name) == ["empty"])
+    }
 }

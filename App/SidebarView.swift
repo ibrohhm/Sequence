@@ -128,6 +128,9 @@ struct SidebarView: View {
     }
 }
 
+/// Indent per tree level: a chevron (12) plus its gap (8), so a child's first slot sits under its parent's icon.
+private let treeIndent: CGFloat = 20
+
 /// One file or folder row with a grey selected state and a lighter grey hover highlight.
 private struct TreeRow<Menu: View>: View {
     @EnvironmentObject var model: AppModel
@@ -169,7 +172,7 @@ private struct TreeRow<Menu: View>: View {
             }
             .font(.system(size: 13))
             .padding(.vertical, 5)
-            .padding(.leading, 8 + CGFloat(depth) * 14)
+            .padding(.leading, 8 + CGFloat(depth) * treeIndent)
             .padding(.trailing, 8)
             .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? model.theme.selectedRow : (hovering || isFocusedFolder || dropTargeted ? model.theme.hoverRow : Color.clear)))
             .contentShape(Rectangle())
@@ -193,7 +196,7 @@ private struct TreeRow<Menu: View>: View {
                     }
                 }
                 .overlay(alignment: .leading) {
-                    Rectangle().fill(model.theme.border).frame(width: 1).padding(.leading, 14 + CGFloat(depth) * 14)
+                    Rectangle().fill(model.theme.border).frame(width: 1).padding(.leading, 14 + CGFloat(depth) * treeIndent)
                 }
             }
         }
@@ -226,7 +229,7 @@ private struct DraftRow: View {
         }
         .font(.system(size: 13))
         .padding(.vertical, 5)
-        .padding(.leading, 8 + CGFloat(depth) * 14).padding(.trailing, 8)
+        .padding(.leading, 8 + CGFloat(depth) * treeIndent).padding(.trailing, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(model.theme.hoverRow))
         .onAppear { focused = true }
         .onChange(of: focused) { _, now in

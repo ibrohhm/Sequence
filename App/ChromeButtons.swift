@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// Where a hover label appears relative to its icon.
-enum TipPlacement { case right, belowTrailing }
+enum TipPlacement { case right, belowTrailing, aboveTrailing }
 
 /// A square icon button with a hover highlight, a raised selected state and a hover label.
 struct ChromeIconButton: View {
@@ -10,13 +10,52 @@ struct ChromeIconButton: View {
     let symbol: String
     let help: String
     var size: CGFloat = 36
+    var glyph: CGFloat = 15
     var selected = false
     var tip: TipPlacement = .belowTrailing
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) { ChromeIcon(symbol: symbol, size: size, selected: selected, help: help, tip: tip) }
+        Button(action: action) { ChromeIcon(symbol: symbol, size: size, glyph: glyph, selected: selected, help: help, tip: tip) }
             .buttonStyle(.plain)
+    }
+}
+
+struct TipInfo {
+    let text: String
+    let anchor: Anchor<CGRect>
+    let placement: TipPlacement
+}
+
+struct TipKey: PreferenceKey {
+    static var defaultValue: TipInfo?
+    static func reduce(value: inout TipInfo?, nextValue: () -> TipInfo?) { value = nextValue() ?? value }
+}
+
+/// Draws the hover label of the icon being hovered above the whole window, so panels cannot clip it.
+struct TipOverlay: View {
+    @EnvironmentObject var model: AppModel
+    let info: TipInfo?
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let info {
+                let rect = proxy[info.anchor]
+                Color.clear.frame(width: rect.width, height: rect.height)
+                    .overlay(alignment: info.placement == .right ? .leading : (info.placement == .aboveTrailing ? .bottomTrailing : .topTrailing)) {
+                        Text(info.text)
+                            .font(.system(size: 12)).foregroundStyle(.primary).fixedSize()
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(model.theme.panelBackground))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(model.theme.border))
+                            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                            .offset(x: info.placement == .right ? rect.width + 6 : 0,
+                                    y: info.placement == .right ? 0 : (info.placement == .aboveTrailing ? -(rect.height + 4) : rect.height + 4))
+                    }
+                    .offset(x: rect.minX, y: rect.minY)
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -24,6 +63,7 @@ struct ChromeIcon: View {
     @EnvironmentObject var model: AppModel
     let symbol: String
     var size: CGFloat = 36
+    var glyph: CGFloat = 15
     var selected = false
     var help: String?
     var tip: TipPlacement = .belowTrailing
@@ -33,7 +73,7 @@ struct ChromeIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 15))
+            .font(.system(size: glyph))
             .foregroundStyle(selected ? Color.primary : Color.secondary)
             .frame(width: size, height: size)
             .background(RoundedRectangle(cornerRadius: 9).fill(selected ? model.theme.selectedRow : (hovering ? model.theme.hoverRow : Color.clear)))
@@ -48,19 +88,10 @@ struct ChromeIcon: View {
                     if !Task.isCancelled { showTip = true }
                 }
             }
-            .overlay(alignment: tip == .right ? .leading : .topTrailing) {
-                if showTip, let help {
-                    Text(help)
-                        .font(.system(size: 12)).foregroundStyle(.primary).fixedSize()
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(model.theme.panelBackground))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(model.theme.border))
-                        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
-                        .offset(x: tip == .right ? size + 6 : 0, y: tip == .right ? 0 : size + 4)
-                        .allowsHitTesting(false)
-                }
+            .anchorPreference(key: TipKey.self, value: .bounds) { anchor in
+                guard showTip, let help else { return nil }
+                return TipInfo(text: help, anchor: anchor, placement: tip)
             }
-            .zIndex(showTip ? 1 : 0)
     }
 }
 

@@ -29,16 +29,16 @@ struct PageHeader: View {
                         Text(title).font(.system(size: 16, weight: .semibold)).lineLimit(1)
                         if !model.inPlayground { DirtyDot(session: session) }
                     }
-                    Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
-                }
-                .contextMenu {
-                    if !model.inPlayground {
-                        Button("Copy Name") { copy(session.url.lastPathComponent) }
-                        Button("Copy Path") { copy(session.url.path) }
+                    HStack(spacing: 4) {
+                        Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                        if !model.inPlayground {
+                            copyButton(symbol: "doc.on.doc", help: "Copy name", text: session.url.lastPathComponent)
+                            copyButton(symbol: "link", help: "Copy path", text: session.url.path)
+                        }
                     }
                 }
                 Spacer(minLength: 12)
-                if findOpen { findField } else { ChromeIconButton(symbol: "magnifyingglass", help: "Find in file (⌘F)", size: 28) { openFind() } }
+                if findOpen { findField } else { ChromeIconButton(symbol: "magnifyingglass", help: "Find in file (⌘F)", size: 28, tip: .aboveTrailing) { openFind() } }
                 if model.inPlayground {
                     Button { model.saveCopyOfPlayground() } label: {
                         Text("Save to folder…").font(.system(size: 13, weight: .medium))
@@ -83,9 +83,11 @@ struct PageHeader: View {
         findFocused = true
     }
 
-    private func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+    private func copyButton(symbol: String, help: String, text: String) -> some View {
+        ChromeIconButton(symbol: symbol, help: help, size: 18, glyph: 11, tip: .aboveTrailing) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
     }
 }
 
@@ -110,7 +112,7 @@ private struct ModeSwitch: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(modes, id: \.symbol) { item in
-                ChromeIconButton(symbol: item.symbol, help: item.help, size: 28, selected: model.mode == item.mode) { model.mode = item.mode }
+                ChromeIconButton(symbol: item.symbol, help: item.help, size: 28, selected: model.mode == item.mode, tip: .aboveTrailing) { model.mode = item.mode }
             }
         }
     }

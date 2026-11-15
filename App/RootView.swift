@@ -33,6 +33,7 @@ struct RootView: View {
             }
         }
         .frame(minWidth: 900, minHeight: 560)
+        .overlayPreferenceValue(TipKey.self) { TipOverlay(info: $0) }
         .background(model.theme.frameBackground)
         .preferredColorScheme(model.theme.colorScheme)
         .background(WindowConfigurator(theme: model.theme))
