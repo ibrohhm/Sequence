@@ -4,7 +4,7 @@ import { findTopic, listProjects, readTopic, searchContent } from "./find.ts";
 import { createProject, createTopic, editTopic, overwriteTopic } from "./write.ts";
 import { loadVaults, pickVault, type Vault } from "./vaults.ts";
 import { openDb } from "./slackdb.ts";
-import { upsertSlackTask } from "./slacktasks.ts";
+import { getSlackTask, upsertSlackTask } from "./slacktasks.ts";
 import { listSlackTags } from "./slacktags.ts";
 
 type Shape = Record<string, z.ZodType>;
@@ -73,6 +73,23 @@ export function buildServer(): McpServer {
       const db = openDb();
       try {
         return listSlackTags(db);
+      } finally {
+        db.close();
+      }
+    },
+    false,
+  );
+
+  tool(
+    "get_slack_task",
+    "Get one Slack task by its number (the #12 shown on its card in Sequence): tag, status, summary, next action, replies, last activity and the Slack link.",
+    { number: z.number().int().min(1).describe("The task number, without the #") },
+    async (_vaults, a) => {
+      const db = openDb();
+      try {
+        const task = getSlackTask(db, a.number);
+        if (!task) throw new Error(`No task #${a.number}`);
+        return task;
       } finally {
         db.close();
       }

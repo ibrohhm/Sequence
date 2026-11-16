@@ -8,7 +8,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { makeVault, vaultsFile } from "./helpers.ts";
 
-const NAMES = ["create_project", "create_topic", "edit_topic", "find_topic", "list_projects", "list_slack_tags", "list_vaults", "overwrite_topic", "read_topic", "search_content", "upsert_slack_task"];
+const NAMES = ["create_project", "create_topic", "edit_topic", "find_topic", "get_slack_task", "list_projects", "list_slack_tags", "list_vaults", "overwrite_topic", "read_topic", "search_content", "upsert_slack_task"];
 
 async function connect(vaultsPath: string, slackDb?: string): Promise<Client> {
   const client = new Client({ name: "test", version: "0" });
@@ -22,7 +22,7 @@ async function connect(vaultsPath: string, slackDb?: string): Promise<Client> {
 
 const text = (r: unknown) => ((r as { content: { text: string }[] }).content[0].text);
 
-test("server lists exactly the eleven tools", async () => {
+test("server lists exactly the twelve tools", async () => {
   const v = await makeVault({}, { git: true });
   const client = await connect(await vaultsFile([v]));
   try {
@@ -125,6 +125,23 @@ test("list_slack_tags returns the seeded tags", async () => {
     assert.deepEqual(tags[0].reactions, ["loading", "loading1"]);
     assert.deepEqual(tags[0].columns, ["Todo", "In progress", "Blocked", "Done"]);
     assert.equal(tags[1].kind, "list");
+  } finally {
+    await client.close();
+  }
+});
+
+test("get_slack_task returns a card by the number upsert reported, and errors for an unknown number", async () => {
+  const db = join(await mkdtemp(join(tmpdir(), "srv-db-")), "slack-tasks.db");
+  const client = await connect(await vaultsFile([]), db);
+  try {
+    const made = JSON.parse(text(await client.callTool({ name: "upsert_slack_task", arguments: { ...SLACK, summary: "Waiting on vendor.", next_action: "Ping vendor" } })));
+    assert.equal(made.number, 1);
+    const got = JSON.parse(text(await client.callTool({ name: "get_slack_task", arguments: { number: made.number } })));
+    assert.equal(got.summary, "Waiting on vendor.");
+    assert.equal(got.tag, "todo");
+    const missing = await client.callTool({ name: "get_slack_task", arguments: { number: 99 } });
+    assert.equal((missing as { isError?: boolean }).isError, true);
+    assert.match(text(missing), /99/);
   } finally {
     await client.close();
   }

@@ -39,8 +39,13 @@ public final class SlackTaskStore {
       summary_replies INTEGER,
       status TEXT NOT NULL DEFAULT '',
       archived INTEGER NOT NULL DEFAULT 0,
+      number INTEGER,
       PRIMARY KEY (tag, channel_id, thread_ts)
     )
+    """
+
+    public static let numberIndexDDL = """
+    CREATE UNIQUE INDEX IF NOT EXISTS tasks_number ON tasks(number)
     """
 
     public enum AddResult { case added, restored, exists }
@@ -62,15 +67,40 @@ public final class SlackTaskStore {
         try exec(Self.tagsDDL)
         try exec(Self.tasksDDL)
         try upgrade()
+        try ensureNumbers()
     }
 
     deinit { sqlite3_close(db) }
 
     private static let copied = "channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced, summary, next_action, summary_replies, archived"
 
+    /// Gives every card without a number the next one, oldest tagged first. Call inside a transaction.
+    private func assignMissingNumbers() throws {
+        let unnumbered = try rows("SELECT rowid FROM tasks WHERE number IS NULL ORDER BY tagged, rowid", []) { Int(sqlite3_column_int64($0, 0)) }
+        var next = try rows("SELECT COALESCE(MAX(number), 0) FROM tasks", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 0
+        for id in unnumbered {
+            next += 1
+            try run("UPDATE tasks SET number = ? WHERE rowid = ?", [.int(next), .int(id)])
+        }
+    }
+
+    /// Cards written by an older build or an older running server have no number; number them on every open.
+    private func ensureNumbers() throws {
+        let missing = try rows("SELECT 1 FROM tasks WHERE number IS NULL LIMIT 1", []) { _ in true }
+        guard !missing.isEmpty else { return }
+        try exec("BEGIN IMMEDIATE")
+        do {
+            try assignMissingNumbers()
+            try exec("COMMIT")
+        } catch {
+            try? exec("ROLLBACK")
+            throw error
+        }
+    }
+
     private func upgrade() throws {
         let version = try rows("PRAGMA user_version", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 0
-        guard version < 3 else { return }
+        guard version < 4 else { return }
         try exec("BEGIN IMMEDIATE")
         do {
             let have = Set(try rows("PRAGMA table_info(tasks)", []) { String(cString: sqlite3_column_text($0, 1)) })
@@ -87,6 +117,8 @@ public final class SlackTaskStore {
                 """)
                 try exec("DROP TABLE tasks")
                 try exec("ALTER TABLE tasks_v3 RENAME TO tasks")
+            } else if !have.contains("number") {
+                try exec("ALTER TABLE tasks ADD COLUMN number INTEGER")
             }
             let tagCount = try rows("SELECT COUNT(*) FROM tags", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 0
             if tagCount == 0 {
@@ -96,7 +128,9 @@ public final class SlackTaskStore {
                 ('saved', 'Saved', 'list', 'saved', '[]', '[]', 1, 1)
                 """)
             }
-            try exec("PRAGMA user_version = 3")
+            try assignMissingNumbers()
+            try exec(Self.numberIndexDDL)
+            try exec("PRAGMA user_version = 4")
             try exec("COMMIT")
         } catch {
             try? exec("ROLLBACK")
@@ -184,7 +218,7 @@ public final class SlackTaskStore {
     public func tasks(tag: String, includeArchived: Bool) throws -> [SlackTask] {
         let sql = """
         SELECT tag, channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced, status, archived,
-               summary, next_action, summary_replies
+               summary, next_action, summary_replies, number
         FROM tasks WHERE tag = ?\(includeArchived ? "" : " AND archived = 0")
         """
         let formatter = ISO8601DateFormatter()
@@ -199,7 +233,7 @@ public final class SlackTaskStore {
                 tag: text(0) ?? "", channelID: text(1) ?? "", threadTS: text(2) ?? "", permalink: text(3) ?? "", channelName: text(4), snippet: text(5),
                 replies: int(6), repliesAtTag: int(7), lastReply: text(8).flatMap { formatter.date(from: $0) },
                 tagged: text(9) ?? "", synced: text(10), status: text(11) ?? "", archived: (int(12) ?? 0) != 0,
-                summary: text(13), nextAction: text(14), summaryReplies: int(15)
+                summary: text(13), nextAction: text(14), summaryReplies: int(15), number: int(16)
             )
         }
     }
@@ -231,8 +265,9 @@ public final class SlackTaskStore {
             } else {
                 let tagged = String(ISO8601DateFormatter().string(from: now).prefix(10))
                 let status = found.kind == .list ? "" : (found.columns.first ?? "")
-                try run("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES (?, ?, ?, ?, ?, ?)",
-                        [.text(tag), .text(link.channelID), .text(link.rootTS), .text(link.permalink), .text(tagged), .text(status)])
+                let number = try rows("SELECT COALESCE(MAX(number), 0) + 1 FROM tasks", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 1
+                try run("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        [.text(tag), .text(link.channelID), .text(link.rootTS), .text(link.permalink), .text(tagged), .text(status), .int(number)])
                 result = .added
             }
             try exec("COMMIT")

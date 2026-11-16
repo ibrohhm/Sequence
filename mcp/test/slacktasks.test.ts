@@ -277,3 +277,39 @@ test("a new card takes the first column of a custom tag", async () => {
   upsertSlackTask(db, { ...BASE, tag: "review" }, NOW);
   assert.equal(rows(db)[0].status, "Open");
 });
+
+import { getSlackTask } from "../src/slacktasks.ts";
+
+test("new cards get consecutive numbers across tags and keep them on update", async () => {
+  const { db } = await fresh();
+  const a = upsertSlackTask(db, BASE, NOW);
+  const b = upsertSlackTask(db, { ...BASE, tag: "saved" }, NOW);
+  const c = upsertSlackTask(db, { ...BASE, message_ts: "1794540000.000100", permalink: "https://amartha.slack.com/archives/C07R08WFC81/p1794540000000100" }, NOW);
+  assert.deepEqual([a.number, b.number, c.number], [1, 2, 3]);
+  assert.equal(upsertSlackTask(db, { ...BASE, replies: 5 }, NOW).number, 1);
+  assert.equal(rows(db).find((r) => r.tag === "todo" && r.thread_ts === "1794536057.965929")!.number, 1);
+});
+
+test("an archived card reports its number and a gap is never reused", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, BASE, NOW);
+  db.exec("UPDATE tasks SET archived = 1");
+  assert.equal(upsertSlackTask(db, BASE, NOW).number, 1);
+  const next = upsertSlackTask(db, { ...BASE, tag: "saved" }, NOW);
+  assert.equal(next.number, 2);
+});
+
+test("getSlackTask returns the card with its tag name, or undefined", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, { ...BASE, summary: "Waiting on vendor.", next_action: "Ping vendor" }, NOW);
+  const task = getSlackTask(db, 1)!;
+  assert.equal(task.number, 1);
+  assert.equal(task.tag, "todo");
+  assert.equal(task.tag_name, "To-do");
+  assert.equal(task.status, "Todo");
+  assert.equal(task.summary, "Waiting on vendor.");
+  assert.equal(task.next_action, "Ping vendor");
+  assert.equal(task.permalink, ROOT_LINK);
+  assert.equal(task.archived, false);
+  assert.equal(getSlackTask(db, 99), undefined);
+});

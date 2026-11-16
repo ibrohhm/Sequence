@@ -99,9 +99,13 @@ struct SlackTasksView: View {
             Text("Archived").font(.system(size: 13, weight: .medium)).padding(.horizontal, 2)
             ForEach(board.archivedTasks) { task in
                 HStack(spacing: 10) {
+                    if let number = task.number { Text("#\(number)").font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(.secondary) }
                     Text(TaskCard.channelLabel(task)).font(.system(size: 12)).foregroundStyle(.secondary)
                     Text(TaskCard.title(task)).font(.system(size: 13)).lineLimit(1)
                     Spacer(minLength: 0)
+                    ChromeIconButton(symbol: "arrow.up.right.square", help: "Open in Slack", size: 24, glyph: 13, tip: .aboveTrailing) {
+                        if let url = URL(string: task.permalink) { NSWorkspace.shared.open(url) }
+                    }
                     Button("Restore") { board.restore(task.id) }.controlSize(.small)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -279,12 +283,20 @@ private struct TaskCard: View {
                     }
                 }
             }
-            HStack(spacing: 6) {
-                Image(systemName: "number").font(.system(size: 10, weight: .semibold))
-                Text(task.channelName ?? task.channelID).lineLimit(1)
+            HStack(spacing: 8) {
+                if let number = task.number {
+                    Text("#\(number)").font(.system(size: 12, weight: .medium)).monospacedDigit()
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: "bubble.left").font(.system(size: 10))
+                    Text(task.channelName ?? task.channelID).lineLimit(1)
+                }
                 Spacer(minLength: 0)
                 if let last = task.lastReply {
                     Text(RelativeDateTimeFormatter.abbreviated.localizedString(for: last, relativeTo: Date()))
+                }
+                ChromeIconButton(symbol: "arrow.up.right.square", help: "Open in Slack", size: 24, glyph: 13, tip: .aboveTrailing) {
+                    if let url = URL(string: task.permalink) { NSWorkspace.shared.open(url) }
                 }
             }
             .font(.system(size: 12)).foregroundStyle(.secondary)
@@ -295,9 +307,6 @@ private struct TaskCard: View {
         .shadow(color: model.theme.cardShadow, radius: 2, y: 1)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture {
-            if let url = URL(string: task.permalink) { NSWorkspace.shared.open(url) }
-        }
         .draggable(task.id)
         .contextMenu { Button("Archive", action: onArchive) }
     }

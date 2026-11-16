@@ -18,10 +18,11 @@ public struct SlackTask: Identifiable, Equatable, Sendable {
     public var summary: String?
     public var nextAction: String?
     public var summaryReplies: Int?
+    public var number: Int?
 
     public init(tag: String, channelID: String, threadTS: String, permalink: String, channelName: String?, snippet: String?, replies: Int?,
                 repliesAtTag: Int?, lastReply: Date?, tagged: String, synced: String?, status: String, archived: Bool,
-                summary: String? = nil, nextAction: String? = nil, summaryReplies: Int? = nil) {
+                summary: String? = nil, nextAction: String? = nil, summaryReplies: Int? = nil, number: Int? = nil) {
         self.tag = tag
         self.channelID = channelID
         self.threadTS = threadTS
@@ -38,6 +39,7 @@ public struct SlackTask: Identifiable, Equatable, Sendable {
         self.summary = summary
         self.nextAction = nextAction
         self.summaryReplies = summaryReplies
+        self.number = number
     }
 
     public var id: String { "\(tag)/\(channelID)/\(threadTS)" }

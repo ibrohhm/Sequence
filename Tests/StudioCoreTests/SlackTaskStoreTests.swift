@@ -58,7 +58,7 @@ import Testing
         let path = tempPath()
         let store = try SlackTaskStore(path: path)
         #expect(FileManager.default.fileExists(atPath: path))
-        #expect(rawText(path, "PRAGMA user_version") == "3")
+        #expect(rawText(path, "PRAGMA user_version") == "4")
         #expect(rawText(path, "PRAGMA journal_mode") == "wal")
         #expect(try store.tags().map(\.id) == ["todo", "saved"])
         _ = try SlackTaskStore(path: path)
@@ -86,7 +86,7 @@ import Testing
         #expect(tasks.map(\.status) == ["Blocked", "Done", "In progress"])
         #expect(tasks.map(\.archived) == [false, true, false])
         #expect(tasks[0].summary == "Waiting on vendor." && tasks[0].summaryReplies == 2)
-        #expect(rawText(path, "PRAGMA user_version") == "3")
+        #expect(rawText(path, "PRAGMA user_version") == "4")
         #expect(try store.tags().count == 2)
         _ = try SlackTaskStore(path: path)
     }
@@ -102,7 +102,7 @@ import Testing
         let task = try #require(try store.tasks(tag: "todo", includeArchived: false).first)
         #expect(task.status == "Blocked")
         #expect(task.summary == nil && task.nextAction == nil && task.summaryReplies == nil)
-        #expect(rawText(path, "PRAGMA user_version") == "3")
+        #expect(rawText(path, "PRAGMA user_version") == "4")
     }
 
     @Test func addInsertsAPastedLinkInTheFirstColumnWithoutFacts() throws {
@@ -276,5 +276,63 @@ import Testing
         let tags = try store.tags()
         #expect(tags.map(\.id) == ["review", "todo", "saved"])
         #expect(tags.map(\.position) == [0, 1, 2])
+    }
+
+    @Test func upgradesAV3DatabaseAndNumbersCardsByTaggedDateThenRowOrder() throws {
+        let path = tempPath()
+        try prepareFolder(path)
+        raw(path, """
+        CREATE TABLE tasks (tag TEXT NOT NULL, channel_id TEXT NOT NULL, thread_ts TEXT NOT NULL, permalink TEXT NOT NULL, channel_name TEXT, snippet TEXT,
+          replies INTEGER, replies_at_tag INTEGER, last_reply TEXT, tagged TEXT NOT NULL, synced TEXT, summary TEXT, next_action TEXT, summary_replies INTEGER,
+          status TEXT NOT NULL DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tag, channel_id, thread_ts));
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES ('todo', 'C', '3.3', 'p', '2026-11-16', 'Blocked');
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES ('todo', 'C', '1.1', 'p', '2026-11-14', 'Done');
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES ('saved', 'C', '1.1', 'p', '2026-11-14', '');
+        PRAGMA user_version = 3;
+        """)
+        let store = try SlackTaskStore(path: path)
+        let todo = try store.tasks(tag: "todo", includeArchived: true).sorted { ($0.number ?? 0) < ($1.number ?? 0) }
+        let saved = try store.tasks(tag: "saved", includeArchived: true)
+        #expect(todo.map(\.threadTS) == ["1.1", "3.3"])
+        #expect(todo.map(\.number) == [1, 3])
+        #expect(todo.map(\.status) == ["Done", "Blocked"])
+        #expect(saved.map(\.number) == [2])
+        #expect(rawText(path, "PRAGMA user_version") == "4")
+        _ = try SlackTaskStore(path: path)
+    }
+
+    @Test func addAssignsTheNextNumberAcrossTagsAndKeepsItOnRestore() throws {
+        let store = try SlackTaskStore(path: tempPath())
+        _ = try store.add(rootLink, tag: "todo", now: now)
+        _ = try store.add(rootLink, tag: "saved", now: now)
+        _ = try store.add(otherLink, tag: "todo", now: now)
+        #expect(try store.tasks(tag: "todo", includeArchived: false).first { $0.threadTS == "1794536057.965929" }?.number == 1)
+        #expect(try store.tasks(tag: "saved", includeArchived: false).first?.number == 2)
+        #expect(try store.tasks(tag: "todo", includeArchived: false).first { $0.threadTS == "1794545000.000200" }?.number == 3)
+        let id = try #require(try store.tasks(tag: "todo", includeArchived: false).first { $0.number == 1 }).id
+        try store.setArchived(true, for: id)
+        _ = try store.add(rootLink, tag: "todo", now: now)
+        #expect(try store.tasks(tag: "todo", includeArchived: false).first { $0.threadTS == "1794536057.965929" }?.number == 1)
+    }
+
+    @Test func aNumberWrittenByTheSyncToolIsDecodedAndTheNextAddFollowsIt() throws {
+        let path = tempPath()
+        let store = try SlackTaskStore(path: path)
+        raw(path, "INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, number) VALUES ('todo','C','9.9','p','2026-11-15', 41)")
+        #expect(try store.tasks(tag: "todo", includeArchived: false).first?.number == 41)
+        _ = try store.add(rootLink, tag: "saved", now: now)
+        #expect(try store.tasks(tag: "saved", includeArchived: false).first?.number == 42)
+    }
+
+    @Test func opening_numbersCardsAnOlderBuildLeftWithoutANumber() throws {
+        let path = tempPath()
+        _ = try SlackTaskStore(path: path)
+        raw(path, """
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged) VALUES ('todo', 'C', '1.1', 'p', '2026-11-15');
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, number) VALUES ('todo', 'C', '2.2', 'p', '2026-11-15', 7);
+        """)
+        let store = try SlackTaskStore(path: path)
+        let tasks = try store.tasks(tag: "todo", includeArchived: true).sorted { $0.threadTS < $1.threadTS }
+        #expect(tasks.map(\.number) == [8, 7])
     }
 }

@@ -5,7 +5,7 @@ import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { SLACK_TAGS_DDL, SLACK_TASKS_DDL, dbPath, openDb } from "../src/slackdb.ts";
+import { SLACK_NUMBER_INDEX, SLACK_TAGS_DDL, SLACK_TASKS_DDL, dbPath, openDb } from "../src/slackdb.ts";
 
 async function tmpFile(): Promise<string> {
   return join(await mkdtemp(join(tmpdir(), "slackdb-")), "nested", "deeper", "slack-tasks.db");
@@ -19,6 +19,10 @@ const V1_DDL = `CREATE TABLE tasks (
   replies INTEGER, replies_at_tag INTEGER, last_reply TEXT, tagged TEXT NOT NULL, synced TEXT,
   status TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo','inprogress','blocked','done')),
   archived INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (channel_id, thread_ts))`;
+const V3_DDL = `CREATE TABLE tasks (
+  tag TEXT NOT NULL, channel_id TEXT NOT NULL, thread_ts TEXT NOT NULL, permalink TEXT NOT NULL, channel_name TEXT, snippet TEXT,
+  replies INTEGER, replies_at_tag INTEGER, last_reply TEXT, tagged TEXT NOT NULL, synced TEXT, summary TEXT, next_action TEXT, summary_replies INTEGER,
+  status TEXT NOT NULL DEFAULT '', archived INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (tag, channel_id, thread_ts))`;
 const V2_DDL = V1_DDL.replace("synced TEXT,", "synced TEXT, summary TEXT, next_action TEXT, summary_replies INTEGER,");
 
 function oldFile(file: string, ddl: string, userVersion: number, rows: string[]): void {
@@ -36,9 +40,9 @@ test("openDb creates the missing parent folder and the file", async () => {
   assert.ok((await stat(file)).isFile());
 });
 
-test("openDb sets user_version 3 and WAL mode", async () => {
+test("openDb sets user_version 4 and WAL mode", async () => {
   const db = openDb(await tmpFile());
-  assert.equal(version(db), 3);
+  assert.equal(version(db), 4);
   assert.equal((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
   db.close();
 });
@@ -100,7 +104,7 @@ test("openDb upgrades a v2 database with cards into the todo tag", async () => {
     { tag: "todo", thread_ts: "2.2", status: "Done", archived: 1, summary: null },
     { tag: "todo", thread_ts: "3.3", status: "In progress", archived: 0, summary: null },
   ]);
-  assert.equal(version(db), 3);
+  assert.equal(version(db), 4);
   assert.equal((db.prepare("SELECT COUNT(*) n FROM tags").get() as { n: number }).n, 2);
   db.close();
 });
@@ -112,7 +116,7 @@ test("openDb upgrades a v1 database through v2 to v3 and keeps its rows", async 
   for (const name of ["tag", "summary", "next_action", "summary_replies"]) assert.ok(columns(db).includes(name), name);
   const row = db.prepare("SELECT tag, status FROM tasks").get() as { tag: string; status: string };
   assert.deepEqual({ ...row }, { tag: "todo", status: "Blocked" });
-  assert.equal(version(db), 3);
+  assert.equal(version(db), 4);
   db.close();
   openDb(file).close();
 });
@@ -123,7 +127,7 @@ test("two opens on one old file at the same time both succeed", async () => {
   const a = openDb(file);
   const b = openDb(file);
   assert.equal((a.prepare("SELECT COUNT(*) n FROM tasks").get() as { n: number }).n, 1);
-  assert.equal(version(b), 3);
+  assert.equal(version(b), 4);
   a.close();
   b.close();
 });
@@ -148,4 +152,54 @@ test("Swift and TypeScript DDL are identical for both tables", async () => {
     assert.ok(match, `SlackTaskStore.swift must define static let ${name}`);
     assert.equal(normalize(match[1]), normalize(ts), name);
   }
+});
+
+test("a fresh database has a number column and a unique index on it", async () => {
+  const db = openDb(await tmpFile());
+  assert.ok(columns(db).includes("number"));
+  const insert = db.prepare("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, number) VALUES ('todo','C',?,'p','2026-11-15',?)");
+  insert.run("1.1", 7);
+  assert.throws(() => insert.run("2.2", 7));
+  insert.run("3.3", null);
+  insert.run("4.4", null);
+  db.close();
+});
+
+test("openDb upgrades a v3 database and numbers the cards by tagged date then row order", async () => {
+  const file = await tmpFile();
+  oldFile(file, V3_DDL, 3, [
+    "INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES ('todo','C','3.3','p','2026-11-16','Blocked')",
+    "INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES ('todo','C','1.1','p','2026-11-14','Done')",
+    "INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status) VALUES ('saved','C','1.1','p','2026-11-14','')",
+  ]);
+  const db = openDb(file);
+  const rows = db.prepare("SELECT tag, thread_ts, status, number FROM tasks ORDER BY number").all().map((r) => ({ ...r }));
+  assert.deepEqual(rows, [
+    { tag: "todo", thread_ts: "1.1", status: "Done", number: 1 },
+    { tag: "saved", thread_ts: "1.1", status: "", number: 2 },
+    { tag: "todo", thread_ts: "3.3", status: "Blocked", number: 3 },
+  ]);
+  assert.equal(version(db), 4);
+  db.close();
+  openDb(file).close();
+});
+
+test("the number index DDL matches the Swift text", async () => {
+  const swift = await readFile(join(import.meta.dirname, "..", "..", "Sources", "StudioCore", "SlackTaskStore.swift"), "utf8");
+  const match = /static let numberIndexDDL = """\n([\s\S]*?)"""/.exec(swift);
+  assert.ok(match, "SlackTaskStore.swift must define static let numberIndexDDL");
+  assert.equal(match[1].replace(/\s+/g, " ").trim(), SLACK_NUMBER_INDEX.replace(/\s+/g, " ").trim());
+});
+
+test("openDb numbers cards an older build left without a number, after the highest existing one", async () => {
+  const file = await tmpFile();
+  openDb(file).close();
+  const raw = new DatabaseSync(file);
+  raw.exec("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged) VALUES ('todo','C','1.1','p','2026-11-15')");
+  raw.exec("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, number) VALUES ('todo','C','2.2','p','2026-11-15', 7)");
+  raw.close();
+  const db = openDb(file);
+  const rows = db.prepare("SELECT thread_ts, number FROM tasks ORDER BY thread_ts").all().map((r) => ({ ...r }));
+  assert.deepEqual(rows, [{ thread_ts: "1.1", number: 8 }, { thread_ts: "2.2", number: 7 }]);
+  db.close();
 });

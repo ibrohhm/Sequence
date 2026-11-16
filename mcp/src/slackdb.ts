@@ -31,15 +31,38 @@ export const SLACK_TASKS_DDL = `CREATE TABLE IF NOT EXISTS tasks (
   summary_replies INTEGER,
   status TEXT NOT NULL DEFAULT '',
   archived INTEGER NOT NULL DEFAULT 0,
+  number INTEGER,
   PRIMARY KEY (tag, channel_id, thread_ts)
 )`;
+
+export const SLACK_NUMBER_INDEX = `CREATE UNIQUE INDEX IF NOT EXISTS tasks_number ON tasks(number)`;
 
 const SUMMARY_COLUMNS: [string, string][] = [["summary", "TEXT"], ["next_action", "TEXT"], ["summary_replies", "INTEGER"]];
 const COPIED = "channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced, summary, next_action, summary_replies, archived";
 
+/** Gives every card without a number the next one, oldest tagged first. Call inside a transaction. */
+function assignMissingNumbers(db: DatabaseSync): void {
+  const unnumbered = db.prepare("SELECT rowid AS id FROM tasks WHERE number IS NULL ORDER BY tagged, rowid").all() as { id: number }[];
+  let next = (db.prepare("SELECT COALESCE(MAX(number), 0) AS n FROM tasks").get() as { n: number }).n;
+  for (const { id } of unnumbered) db.prepare("UPDATE tasks SET number = ? WHERE rowid = ?").run(++next, id);
+}
+
+/** Cards written by an older build or an older running server have no number; number them on every open. */
+function ensureNumbers(db: DatabaseSync): void {
+  if (!db.prepare("SELECT 1 AS x FROM tasks WHERE number IS NULL LIMIT 1").get()) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    assignMissingNumbers(db);
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 function upgrade(db: DatabaseSync): void {
   const version = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
-  if (version >= 3) return;
+  if (version >= 4) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     const names = () => new Set((db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]).map((c) => c.name));
@@ -52,13 +75,17 @@ function upgrade(db: DatabaseSync): void {
                FROM tasks`);
       db.exec("DROP TABLE tasks");
       db.exec("ALTER TABLE tasks_v3 RENAME TO tasks");
+    } else if (!names().has("number")) {
+      db.exec("ALTER TABLE tasks ADD COLUMN number INTEGER");
     }
     if ((db.prepare("SELECT COUNT(*) AS n FROM tags").get() as { n: number }).n === 0) {
       db.exec(`INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position, builtin) VALUES
         ('todo', 'To-do', 'board', 'todo', '["loading","loading1"]', '["Todo","In progress","Blocked","Done"]', 0, 1),
         ('saved', 'Saved', 'list', 'saved', '[]', '[]', 1, 1)`);
     }
-    db.exec("PRAGMA user_version = 3");
+    assignMissingNumbers(db);
+    db.exec(SLACK_NUMBER_INDEX);
+    db.exec("PRAGMA user_version = 4");
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -78,5 +105,6 @@ export function openDb(file: string = dbPath()): DatabaseSync {
   db.exec(SLACK_TAGS_DDL);
   db.exec(SLACK_TASKS_DDL);
   upgrade(db);
+  ensureNumbers(db);
   return db;
 }
