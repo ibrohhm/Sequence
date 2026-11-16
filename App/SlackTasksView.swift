@@ -55,11 +55,29 @@ struct SlackTasksView: View {
                 .background(RoundedRectangle(cornerRadius: 8).fill(model.theme.chipFill))
                 .onSubmit(addLink)
             ChromeIconButton(symbol: "plus", help: "Add to this page", size: 28, tip: .belowTrailing, action: addLink)
+            if let tags = titleSyncTags {
+                syncButton(key: tags.key, help: tags.help, size: 28, glyph: 15) { board.sync(tags: tags.tags, key: tags.key) }
+            }
             Toggle("Archived", isOn: $board.showArchived).toggleStyle(.switch).controlSize(.small).font(.system(size: 12))
         }
         .padding(.horizontal, 16)
         .frame(height: 56)
         .overlay(alignment: .bottom) { Rectangle().fill(model.theme.border).frame(height: 1) }
+    }
+
+    /// The page-level sync: a list page's own tag, or every board tag when the Tasks page is merged (split mode syncs per section).
+    private var titleSyncTags: (tags: [SlackTag], key: String, help: String)? {
+        if let list = board.currentListTag { return ([list], SlackTasksModel.syncKey(tag: list.id), "Sync \(list.name)") }
+        if board.isTasksPage, !grouped, !board.boardTags.isEmpty { return (board.boardTags, "tag:*", "Sync all tasks") }
+        return nil
+    }
+
+    @ViewBuilder private func syncButton(key: String, help: String, size: CGFloat, glyph: CGFloat, action: @escaping () -> Void) -> some View {
+        if board.syncing.contains(key) {
+            ProgressView().controlSize(.small).frame(width: size, height: size).help("Syncing…")
+        } else {
+            ChromeIconButton(symbol: "arrow.triangle.2.circlepath", help: help, size: size, glyph: glyph, tip: .aboveTrailing, action: action)
+        }
     }
 
     private var tabBar: some View {
@@ -118,18 +136,22 @@ struct SlackTasksView: View {
 
     private func sectionHeader(_ tag: SlackTag, count: Int) -> some View {
         let isCollapsed = board.collapsed.contains(tag.id)
-        return Button { board.toggleCollapsed(tag.id) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary).frame(width: 12)
-                Text(tag.name).font(.system(size: 14, weight: .semibold))
-                CountChip(count: count)
-                Spacer(minLength: 0)
+        return HStack(spacing: 8) {
+            Button { board.toggleCollapsed(tag.id) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary).frame(width: 12)
+                    Text(tag.name).font(.system(size: 14, weight: .semibold))
+                    CountChip(count: count)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(tag.name), \(count) tasks, \(isCollapsed ? "collapsed" : "expanded")")
+            let key = SlackTasksModel.syncKey(tag: tag.id)
+            syncButton(key: key, help: "Sync \(tag.name)", size: 24, glyph: 13) { board.sync(tags: [tag], key: key) }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(tag.name), \(count) tasks, \(isCollapsed ? "collapsed" : "expanded")")
     }
 
     private var listPage: some View {
@@ -166,7 +188,8 @@ struct SlackTasksView: View {
 
     private func card(_ task: SlackTask, list: Bool) -> some View {
         TaskCard(task: task, list: list, doneColumn: list ? nil : SlackColumns.done, tagName: list ? nil : board.tagName(task.tag),
-                 onArchive: { board.archive(task.id) })
+                 syncing: board.syncing.contains(SlackTasksModel.syncKey(task: task.id)),
+                 onSync: { board.sync(task: task) }, onArchive: { board.archive(task.id) })
     }
 
     private func drop(_ ids: [String], on column: String, section: String?) -> Bool {
@@ -311,6 +334,8 @@ private struct TaskCard: View {
     let list: Bool
     let doneColumn: String?
     var tagName: String?
+    let syncing: Bool
+    let onSync: () -> Void
     let onArchive: () -> Void
     @State private var hovering = false
 
@@ -352,6 +377,11 @@ private struct TaskCard: View {
                 Spacer(minLength: 0)
                 if let last = task.lastReply {
                     Text(RelativeDateTimeFormatter.abbreviated.localizedString(for: last, relativeTo: Date()))
+                }
+                if syncing {
+                    ProgressView().controlSize(.small).frame(width: 24, height: 24).help("Syncing…")
+                } else {
+                    ChromeIconButton(symbol: "arrow.triangle.2.circlepath", help: "Sync this task", size: 24, glyph: 13, tip: .aboveTrailing, action: onSync)
                 }
                 ChromeIconButton(symbol: "arrow.up.right.square", help: "Open in Slack", size: 24, glyph: 13, tip: .aboveTrailing) {
                     if let url = URL(string: task.permalink) { NSWorkspace.shared.open(url) }

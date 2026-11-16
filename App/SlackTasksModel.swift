@@ -13,6 +13,7 @@ final class SlackTasksModel: ObservableObject {
     @Published private(set) var addTagID: String = UserDefaults.standard.string(forKey: "slackAddTag") ?? "todo"
     @Published var showArchived = false
     @Published var notice: String?
+    @Published private(set) var syncing: Set<String> = []
 
     private var store: SlackTaskStore?
     private var lastVersion = -1
@@ -92,6 +93,42 @@ final class SlackTasksModel: ObservableObject {
         write { try $0.setStatus(column, for: id) }
     }
 
+    static func syncKey(tag: String) -> String { "tag:\(tag)" }
+    static func syncKey(task: String) -> String { "task:\(task)" }
+
+    /// Syncs the given tags through the Claude CLI; `key` is what the buttons watch to show progress.
+    func sync(tags: [SlackTag], key: String) {
+        guard !tags.isEmpty else { return }
+        runSync(SlackSync.tagPrompt(tags), key: key, done: tags.count == 1 ? "Synced \(tags[0].name)." : "Synced \(tags.count) tags.")
+    }
+
+    func sync(task: SlackTask) {
+        guard let number = task.number else { return say("This task has no number yet. Sync its tag first.") }
+        runSync(SlackSync.taskPrompt(number: number), key: Self.syncKey(task: task.id), done: "Synced #\(number).")
+    }
+
+    private func runSync(_ prompt: String, key: String, done: String) {
+        guard !syncing.contains(key) else { return }
+        guard let claude = try? ToolLocator(searchDirs: ToolLocator.claudeDirs).claude() else {
+            return say("Claude Code was not found. Install it and sign in, then try again.", seconds: 12)
+        }
+        syncing.insert(key)
+        Task {
+            defer { syncing.remove(key) }
+            do {
+                let reply = try await SlackSync(claude: claude).run(prompt)
+                reload()
+                say(reply.components(separatedBy: "\n").last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? done, seconds: 10)
+            } catch SlackSyncError.timedOut {
+                say("Sync took too long and was stopped.", seconds: 12)
+            } catch SlackSyncError.failed(let message) {
+                say("Sync failed: \(message)", seconds: 12)
+            } catch {
+                say("Sync failed: \(error.localizedDescription)", seconds: 12)
+            }
+        }
+    }
+
     func archive(_ id: String) { write { try $0.setArchived(true, for: id) } }
     func restore(_ id: String) { write { try $0.setArchived(false, for: id) } }
 
@@ -146,12 +183,12 @@ final class SlackTasksModel: ObservableObject {
         notice = error.localizedDescription
     }
 
-    private func say(_ text: String) {
+    private func say(_ text: String, seconds: UInt64 = 4) {
         notice = text
         showingError = false
         noticeClear?.cancel()
         noticeClear = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: seconds * 1_000_000_000)
             if !Task.isCancelled { self?.notice = nil }
         }
     }
