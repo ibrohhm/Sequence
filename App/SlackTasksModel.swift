@@ -4,7 +4,9 @@ import StudioCore
 /// Loads the Slack tasks database for the board and keeps it fresh while the board is open.
 @MainActor
 final class SlackTasksModel: ObservableObject {
+    @Published private(set) var tags: [SlackTag] = []
     @Published private(set) var tasks: [SlackTask] = []
+    @Published private(set) var selectedTag: String = UserDefaults.standard.string(forKey: "slackTagSelected") ?? "todo"
     @Published var showArchived = false
     @Published var notice: String?
 
@@ -14,8 +16,11 @@ final class SlackTasksModel: ObservableObject {
     private var noticeClear: Task<Void, Never>?
     private var showingError = false
 
-    var columns: [SlackStatus: [SlackTask]] { SlackBoard.columns(tasks) }
+    var currentTag: SlackTag? { tags.first { $0.id == selectedTag } }
+    var groups: [(name: String, tasks: [SlackTask])] { currentTag.map { SlackBoard.groups(tasks, for: $0) } ?? [] }
     var archivedTasks: [SlackTask] { tasks.filter(\.archived) }
+    /// Cards in the last column count as done.
+    var doneColumn: String? { currentTag?.kind == .board ? currentTag?.columns.last : nil }
 
     func start() {
         guard polling == nil else { return }
@@ -34,22 +39,29 @@ final class SlackTasksModel: ObservableObject {
         polling = nil
     }
 
+    func select(tag: String) {
+        guard tag != selectedTag else { return }
+        selectedTag = tag
+        UserDefaults.standard.set(tag, forKey: "slackTagSelected")
+        reload()
+    }
+
     func add(_ text: String) {
         guard let link = SlackLink.parse(text) else { return say("That is not a Slack message link.") }
         guard openStore() else { return }
         do {
-            switch try store!.add(link) {
+            switch try store!.add(link, tag: selectedTag) {
             case .added: break
-            case .exists: say("Already on the board.")
+            case .exists: say("Already on this page.")
             case .restored: say("Restored from archive.")
             }
             reload()
         } catch { fail(error) }
     }
 
-    func move(_ id: String, to status: SlackStatus) {
-        guard let task = tasks.first(where: { $0.id == id }), task.status != status else { return }
-        write { try $0.setStatus(status, for: id) }
+    func move(_ id: String, to column: String) {
+        guard let task = tasks.first(where: { $0.id == id }), task.status != column else { return }
+        write { try $0.setStatus(column, for: id) }
     }
 
     func archive(_ id: String) { write { try $0.setArchived(true, for: id) } }
@@ -86,7 +98,10 @@ final class SlackTasksModel: ObservableObject {
         guard let store else { return }
         do {
             let version = try store.dataVersion()
-            tasks = try store.tasks(includeArchived: true)
+            let loaded = try store.tags()
+            if !loaded.contains(where: { $0.id == selectedTag }), let first = loaded.first { selectedTag = first.id }
+            tags = loaded
+            tasks = try store.tasks(tag: selectedTag, includeArchived: true)
             lastVersion = version
             if showingError { notice = nil; showingError = false }
         } catch { fail(error) }

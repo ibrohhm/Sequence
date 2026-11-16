@@ -8,7 +8,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { makeVault, vaultsFile } from "./helpers.ts";
 
-const NAMES = ["create_project", "create_topic", "edit_topic", "find_topic", "list_projects", "list_vaults", "overwrite_topic", "read_topic", "search_content", "upsert_slack_task"];
+const NAMES = ["create_project", "create_topic", "edit_topic", "find_topic", "list_projects", "list_slack_tags", "list_vaults", "overwrite_topic", "read_topic", "search_content", "upsert_slack_task"];
 
 async function connect(vaultsPath: string, slackDb?: string): Promise<Client> {
   const client = new Client({ name: "test", version: "0" });
@@ -22,7 +22,7 @@ async function connect(vaultsPath: string, slackDb?: string): Promise<Client> {
 
 const text = (r: unknown) => ((r as { content: { text: string }[] }).content[0].text);
 
-test("server lists exactly the ten tools", async () => {
+test("server lists exactly the eleven tools", async () => {
   const v = await makeVault({}, { git: true });
   const client = await connect(await vaultsFile([v]));
   try {
@@ -62,6 +62,7 @@ test("a bad vaults file returns an error result and the server stays alive", asy
 });
 
 const SLACK = {
+  tag: "todo",
   channel_id: "C07R08WFC81",
   message_ts: "1794536057.965929",
   permalink: "https://amartha.slack.com/archives/C07R08WFC81/p1794536057965929",
@@ -110,6 +111,20 @@ test("upsert_slack_task reports summary_stale then accepts a summary", async () 
       arguments: { ...SLACK, summary: "Waiting on vendor.", next_action: "Ping vendor on Monday" },
     })));
     assert.equal(second.summary_stale, false);
+  } finally {
+    await client.close();
+  }
+});
+
+test("list_slack_tags returns the seeded tags", async () => {
+  const db = join(await mkdtemp(join(tmpdir(), "srv-db-")), "slack-tasks.db");
+  const client = await connect(await vaultsFile([]), db);
+  try {
+    const tags = JSON.parse(text(await client.callTool({ name: "list_slack_tags", arguments: {} })));
+    assert.deepEqual(tags.map((t: { id: string }) => t.id), ["todo", "saved"]);
+    assert.deepEqual(tags[0].reactions, ["loading", "loading1"]);
+    assert.deepEqual(tags[0].columns, ["Todo", "In progress", "Blocked", "Done"]);
+    assert.equal(tags[1].kind, "list");
   } finally {
     await client.close();
   }

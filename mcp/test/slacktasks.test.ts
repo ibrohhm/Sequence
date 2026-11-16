@@ -9,6 +9,7 @@ import { upsertSlackTask, type UpsertInput } from "../src/slacktasks.ts";
 
 const NOW = new Date("2026-11-15T10:00:00Z");
 const BASE: UpsertInput = {
+  tag: "todo",
   channel_id: "C07R08WFC81",
   message_ts: "1794536057.965929",
   permalink: "https://amartha.slack.com/archives/C07R08WFC81/p1794536057965929",
@@ -31,7 +32,8 @@ test("creates a card", async () => {
   assert.equal(r.action, "created");
   const [row] = rows(db);
   assert.equal(row.thread_ts, "1794536057.965929");
-  assert.equal(row.status, "todo");
+  assert.equal(row.status, "Todo");
+  assert.equal(row.tag, "todo");
   assert.equal(row.archived, 0);
   assert.equal(row.tagged, "2026-11-15");
   assert.equal(row.replies_at_tag, 0);
@@ -90,7 +92,7 @@ test("an explicit thread_ts wins over the permalink query", async () => {
 
 test("a board-added row keyed by a reply ts is re-keyed to the root", async () => {
   const { db } = await fresh();
-  db.prepare("INSERT INTO tasks (channel_id, thread_ts, permalink, tagged) VALUES (?,?,?,?)")
+  db.prepare("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged) VALUES ('todo',?,?,?,?)")
     .run("C07R08WFC81", "1794540000.000100", "https://amartha.slack.com/archives/C07R08WFC81/p1794540000000100", "2026-11-14");
   db.exec("UPDATE tasks SET status = 'inprogress'");
   upsertSlackTask(db, { ...BASE, message_ts: "1794540000.000100", thread_ts: "1794536057.965929", replies: 4 }, NOW);
@@ -104,7 +106,7 @@ test("a board-added row keyed by a reply ts is re-keyed to the root", async () =
 
 test("fills a NULL replies_at_tag on a root-keyed board-added row", async () => {
   const { db } = await fresh();
-  db.prepare("INSERT INTO tasks (channel_id, thread_ts, permalink, tagged) VALUES (?,?,?,?)")
+  db.prepare("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged) VALUES ('todo',?,?,?,?)")
     .run("C07R08WFC81", "1794536057.965929", ROOT_LINK, "2026-11-14");
   const r = upsertSlackTask(db, { ...BASE, replies: 2 }, NOW);
   assert.equal(r.action, "updated");
@@ -214,4 +216,64 @@ test("an archived row reports summary_stale false and writes nothing", async () 
   assert.equal(r.action, "archived");
   assert.equal(r.summary_stale, false);
   assert.equal(rows(db)[0].summary, null);
+});
+
+function addTag(db: DatabaseSync, id: string, kind: string, columns: string[], slackList = "none"): void {
+  db.prepare("INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position) VALUES (?,?,?,?,?,?,9)")
+    .run(id, id, kind, slackList, "[]", JSON.stringify(columns));
+}
+
+test("the same thread under two tags is two independent cards", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, BASE, NOW);
+  upsertSlackTask(db, { ...BASE, tag: "saved" }, NOW);
+  assert.equal(rows(db).length, 2);
+  db.exec("UPDATE tasks SET status = 'Blocked' WHERE tag = 'todo'");
+  db.exec("UPDATE tasks SET archived = 1 WHERE tag = 'saved'");
+  assert.equal(upsertSlackTask(db, { ...BASE, replies: 4 }, NOW).action, "updated");
+  assert.equal(upsertSlackTask(db, { ...BASE, tag: "saved", replies: 4 }, NOW).action, "archived");
+  const byTag = Object.fromEntries(rows(db).map((r) => [r.tag as string, r]));
+  assert.equal(byTag.todo.status, "Blocked");
+  assert.equal(byTag.todo.replies, 4);
+  assert.equal(byTag.saved.replies, 0);
+});
+
+test("an unknown tag throws and writes nothing", async () => {
+  const { db } = await fresh();
+  assert.throws(() => upsertSlackTask(db, { ...BASE, tag: "nope" }, NOW), /nope/);
+  assert.equal(rows(db).length, 0);
+});
+
+test("a list tag stores NULL replies when omitted, an empty status, and is stale until summarized", async () => {
+  const { db } = await fresh();
+  const { replies: _omitted, ...noReplies } = BASE;
+  const first = upsertSlackTask(db, { ...noReplies, tag: "saved" }, NOW);
+  assert.equal(first.summary_stale, true);
+  const [row] = rows(db);
+  assert.equal(row.replies, null);
+  assert.equal(row.replies_at_tag, null);
+  assert.equal(row.status, "");
+  const done = upsertSlackTask(db, { ...noReplies, tag: "saved", summary: "A saved note." }, NOW);
+  assert.equal(done.summary_stale, false);
+  assert.equal(upsertSlackTask(db, { ...noReplies, tag: "saved" }, NOW).summary_stale, false);
+});
+
+test("next_action on a list tag is rejected and writes nothing", async () => {
+  const { db } = await fresh();
+  assert.throws(() => upsertSlackTask(db, { ...BASE, tag: "saved", summary: "S", next_action: "N" }, NOW), /list/);
+  assert.equal(rows(db).length, 0);
+});
+
+test("a board tag without replies is rejected", async () => {
+  const { db } = await fresh();
+  const { replies: _omitted, ...noReplies } = BASE;
+  assert.throws(() => upsertSlackTask(db, noReplies, NOW), /replies/);
+  assert.equal(rows(db).length, 0);
+});
+
+test("a new card takes the first column of a custom tag", async () => {
+  const { db } = await fresh();
+  addTag(db, "review", "board", ["Open", "Done"]);
+  upsertSlackTask(db, { ...BASE, tag: "review" }, NOW);
+  assert.equal(rows(db)[0].status, "Open");
 });

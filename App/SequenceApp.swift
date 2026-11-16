@@ -51,6 +51,8 @@ struct SequenceApp: App {
     var body: some Scene {
         WindowGroup("Sequence") { WindowRoot() }
             .commands { SequenceCommands() }
+        Window("Slack tags", id: "slack-tags") { SlackTagsEditorView() }
+            .defaultSize(width: 700, height: 480)
         Settings { SettingsView() }
     }
 }

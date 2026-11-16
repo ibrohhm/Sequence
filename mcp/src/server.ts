@@ -5,6 +5,7 @@ import { createProject, createTopic, editTopic, overwriteTopic } from "./write.t
 import { loadVaults, pickVault, type Vault } from "./vaults.ts";
 import { openDb } from "./slackdb.ts";
 import { upsertSlackTask } from "./slacktasks.ts";
+import { listSlackTags } from "./slacktags.ts";
 
 type Shape = Record<string, z.ZodType>;
 
@@ -41,13 +42,14 @@ export function buildServer(): McpServer {
     "upsert_slack_task",
     "Create or update a Slack thread card in the Sequence tasks database. Keeps status and archived; skips archived threads. Pass the thread's first message as snippet and the reply count. The result has summary_stale: when true, call again with summary and next_action.",
     {
+      tag: z.string().describe("Tag id from list_slack_tags"),
       channel_id: z.string(),
       message_ts: z.string().describe("ts of the message that was tagged"),
       thread_ts: z.string().optional().describe("ts of the thread's first message, if known"),
       permalink: z.string(),
       channel_name: z.string(),
       snippet: z.string(),
-      replies: z.number().int().min(0),
+      replies: z.number().int().min(0).optional().describe("Reply count; required for board tags, omit for list tags"),
       last_reply: z.string().describe("Slack ts or ISO time of the last message in the thread"),
       summary: z.string().max(300).optional().describe("Where the thread stands now, about 140 characters; send only when summary_stale was true"),
       next_action: z.string().max(200).optional().describe("What the user should do or wait for, about 100 characters; needs summary"),
@@ -56,6 +58,21 @@ export function buildServer(): McpServer {
       const db = openDb();
       try {
         return upsertSlackTask(db, a);
+      } finally {
+        db.close();
+      }
+    },
+    false,
+  );
+
+  tool(
+    "list_slack_tags",
+    "List the Slack tags (id, name, kind board or list, slack_list none/todo/saved, reactions, columns) in the Sequence tasks database, in page order.",
+    {},
+    async () => {
+      const db = openDb();
+      try {
+        return listSlackTags(db);
       } finally {
         db.close();
       }

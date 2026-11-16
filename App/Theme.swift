@@ -24,6 +24,18 @@ enum Theme: String {
     var border: Color { self == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.09) }
     var accent: Color { Color(nsColor: NSColor(hex: 0xDB6510)) }
 
+    // Board cards, columns, chips and tabs. Text colours keep 4.5:1 on their fills in both themes.
+    var columnBackground: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x181818)) : Color(nsColor: NSColor(hex: 0xF4F4F5)) }
+    var cardBackground: Color { self == .dark ? Color(nsColor: NSColor(hex: 0x262626)) : .white }
+    var cardBorder: Color { self == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.07) }
+    var cardBorderHover: Color { self == .dark ? Color.white.opacity(0.18) : Color.black.opacity(0.16) }
+    var cardShadow: Color { self == .dark ? Color.black.opacity(0.35) : Color.black.opacity(0.06) }
+    var chipFill: Color { self == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05) }
+    var chipText: Color { self == .dark ? Color(nsColor: NSColor(hex: 0xC8C8C8)) : Color(nsColor: NSColor(hex: 0x4B4B50)) }
+    var attentionFill: Color { Color(nsColor: NSColor(hex: 0xDB6510)).opacity(self == .dark ? 0.20 : 0.12) }
+    var attentionText: Color { self == .dark ? Color(nsColor: NSColor(hex: 0xF4A868)) : Color(nsColor: NSColor(hex: 0xA64B0A)) }
+    var tabTrack: Color { self == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05) }
+
     static let cssVariables = """
     :root, :root[data-theme="light"] { color-scheme: light; --fg:#1f2328; --bg:#fff; --muted:#59636e; --line:#d1d9e0; --code:#f6f8fa; --link:#0969da; --diagram-bg:#fff; }
     :root[data-theme="dark"] { color-scheme: dark; --fg:#cccccc; --bg:#1f1f1f; --muted:#9d9d9d; --line:#3c3c3c; --code:#2b2b2b; --link:#4daafc; --diagram-bg:#fff; }

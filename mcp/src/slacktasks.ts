@@ -1,13 +1,15 @@
 import type { DatabaseSync } from "node:sqlite";
+import { getSlackTag } from "./slacktags.ts";
 
 export type UpsertInput = {
+  tag: string;
   channel_id: string;
   message_ts: string;
   thread_ts?: string;
   permalink: string;
   channel_name: string;
   snippet: string;
-  replies: number;
+  replies?: number;
   last_reply: string;
   summary?: string;
   next_action?: string;
@@ -34,12 +36,12 @@ function lastReplyIso(value: string): string {
 }
 
 function validate(input: UpsertInput): URL {
-  for (const key of ["channel_id", "message_ts", "permalink", "channel_name"] as const) {
+  for (const key of ["tag", "channel_id", "message_ts", "permalink", "channel_name"] as const) {
     if (typeof input[key] !== "string" || input[key].trim() === "") throw new Error(`${key} must be a non-empty string`);
   }
   if (!SLACK_TS.test(input.message_ts)) throw new Error(`message_ts must look like 1794536057.965929: ${input.message_ts}`);
   if (typeof input.snippet !== "string") throw new Error("snippet must be a string");
-  if (!Number.isInteger(input.replies) || input.replies < 0) throw new Error("replies must be a non-negative integer");
+  if (input.replies !== undefined && (!Number.isInteger(input.replies) || input.replies < 0)) throw new Error("replies must be a non-negative integer");
   if (input.summary !== undefined && (typeof input.summary !== "string" || input.summary.trim() === "" || input.summary.length > 300)) {
     throw new Error("summary must be a non-empty string of at most 300 characters");
   }
@@ -65,12 +67,20 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
   const channel = input.channel_id;
   const synced = iso(now);
   const result = (action: UpsertResult["action"], ts: string, stale = false): UpsertResult => ({ action, channel_id: channel, thread_ts: ts, summary_stale: stale });
-  const stale = (ts: string) =>
-    (db.prepare("SELECT (summary IS NULL OR summary_replies IS NOT replies) AS stale FROM tasks WHERE channel_id = ? AND thread_ts = ?").get(channel, ts) as { stale: number }).stale === 1;
+  const tagId = input.tag;
+  const staleSql = (list: boolean) =>
+    `SELECT (${list ? "summary IS NULL" : "summary IS NULL OR summary_replies IS NOT replies"}) AS stale FROM tasks WHERE tag = ? AND channel_id = ? AND thread_ts = ?`;
 
   db.exec("BEGIN IMMEDIATE");
   try {
-    const find = (ts: string) => db.prepare("SELECT archived FROM tasks WHERE channel_id = ? AND thread_ts = ?").get(channel, ts) as Row;
+    const tag = getSlackTag(db, tagId);
+    if (!tag) throw new Error(`Unknown tag "${tagId}"`);
+    const isList = tag.kind === "list";
+    if (isList && input.next_action !== undefined) throw new Error("next_action is not used on list tags");
+    if (!isList && input.replies === undefined) throw new Error("replies is required for a board tag");
+    const replies = input.replies ?? null;
+    const stale = (ts: string) => (db.prepare(staleSql(isList)).get(tagId, channel, ts) as { stale: number }).stale === 1;
+    const find = (ts: string) => db.prepare("SELECT archived FROM tasks WHERE tag = ? AND channel_id = ? AND thread_ts = ?").get(tagId, channel, ts) as Row;
     let row = find(threadTs);
     if (!row && input.message_ts !== threadTs) {
       const alt = find(input.message_ts);
@@ -79,7 +89,7 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
         return result("archived", input.message_ts);
       }
       if (alt) {
-        db.prepare("UPDATE tasks SET thread_ts = ? WHERE channel_id = ? AND thread_ts = ?").run(threadTs, channel, input.message_ts);
+        db.prepare("UPDATE tasks SET thread_ts = ? WHERE tag = ? AND channel_id = ? AND thread_ts = ?").run(threadTs, tagId, channel, input.message_ts);
         row = alt;
       }
     }
@@ -91,18 +101,19 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
       const withSummary = input.summary !== undefined;
       db.prepare(`UPDATE tasks SET permalink = ?, channel_name = ?, snippet = ?, replies = ?, last_reply = ?, synced = ?,
                   replies_at_tag = COALESCE(replies_at_tag, ?)${withSummary ? ", summary = ?, next_action = ?, summary_replies = ?" : ""}
-                  WHERE channel_id = ? AND thread_ts = ?`)
-        .run(root, input.channel_name, input.snippet, input.replies, lastReply, synced, input.replies,
-          ...(withSummary ? [input.summary!, input.next_action ?? null, input.replies] : []), channel, threadTs);
+                  WHERE tag = ? AND channel_id = ? AND thread_ts = ?`)
+        .run(root, input.channel_name, input.snippet, replies, lastReply, synced, replies,
+          ...(withSummary ? [input.summary!, input.next_action ?? null, replies] : []), tagId, channel, threadTs);
       const isStale = stale(threadTs);
       db.exec("COMMIT");
       return result("updated", threadTs, isStale);
     }
-    db.prepare(`INSERT INTO tasks (channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced,
-                                   summary, next_action, summary_replies)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-      .run(channel, threadTs, root, input.channel_name, input.snippet, input.replies, input.replies, lastReply, iso(now).slice(0, 10), synced,
-        input.summary ?? null, input.summary !== undefined ? (input.next_action ?? null) : null, input.summary !== undefined ? input.replies : null);
+    db.prepare(`INSERT INTO tasks (tag, channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced,
+                                   summary, next_action, summary_replies, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(tagId, channel, threadTs, root, input.channel_name, input.snippet, replies, replies, lastReply, iso(now).slice(0, 10), synced,
+        input.summary ?? null, input.summary !== undefined ? (input.next_action ?? null) : null, input.summary !== undefined ? replies : null,
+        isList ? "" : (tag.columns[0] ?? ""));
     const isStale = stale(threadTs);
     db.exec("COMMIT");
     return result("created", threadTs, isStale);
