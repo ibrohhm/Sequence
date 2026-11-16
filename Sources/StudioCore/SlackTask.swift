@@ -71,14 +71,34 @@ public struct SlackTask: Identifiable, Equatable, Sendable {
 }
 
 public enum SlackBoard {
-    /// A tag's active cards grouped by column (a list is one unnamed group), newest activity first.
-    /// A card whose status matches no column is shown in the first column.
+    /// A tag's active cards grouped by the four standard columns (a list is one unnamed group), newest activity first.
+    /// A card whose status is not a standard column is shown in the first column.
     public static func groups(_ tasks: [SlackTask], for tag: SlackTag) -> [(name: String, tasks: [SlackTask])] {
-        let mine = tasks.filter { $0.tag == tag.id && !$0.archived }
-            .sorted { $0.activity != $1.activity ? $0.activity > $1.activity : $0.id < $1.id }
-        guard tag.kind == .board, let first = tag.columns.first else { return [(name: "", tasks: mine)] }
-        return tag.columns.map { column in
-            (name: column, tasks: mine.filter { tag.columns.contains($0.status) ? $0.status == column : column == first })
+        let mine = sorted(tasks.filter { $0.tag == tag.id && !$0.archived })
+        guard tag.kind == .board else { return [(name: "", tasks: mine)] }
+        return columns(of: mine)
+    }
+
+    /// One section per board tag, sorted by name ignoring case, each with the four standard columns.
+    public static func sections(_ tasks: [SlackTask], tags: [SlackTag]) -> [(tag: SlackTag, columns: [(name: String, tasks: [SlackTask])])] {
+        tags.filter { $0.kind == .board }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            .map { (tag: $0, columns: groups(tasks, for: $0)) }
+    }
+
+    /// Every board tag's active cards in one set of the four standard columns, newest activity first.
+    public static func merged(_ tasks: [SlackTask], tags: [SlackTag]) -> [(name: String, tasks: [SlackTask])] {
+        let ids = Set(tags.filter { $0.kind == .board }.map(\.id))
+        return columns(of: sorted(tasks.filter { ids.contains($0.tag) && !$0.archived }))
+    }
+
+    private static func sorted(_ tasks: [SlackTask]) -> [SlackTask] {
+        tasks.sorted { $0.activity != $1.activity ? $0.activity > $1.activity : $0.id < $1.id }
+    }
+
+    private static func columns(of tasks: [SlackTask]) -> [(name: String, tasks: [SlackTask])] {
+        SlackColumns.all.map { column in
+            (name: column, tasks: tasks.filter { (SlackColumns.all.contains($0.status) ? $0.status : SlackColumns.all[0]) == column })
         }
     }
 }

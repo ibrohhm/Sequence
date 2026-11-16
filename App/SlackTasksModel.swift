@@ -1,12 +1,16 @@
 import SwiftUI
 import StudioCore
 
-/// Loads the Slack tasks database for the board and keeps it fresh while the board is open.
+/// Loads the Slack tasks database for the Tasks page and the list pages, and keeps it fresh while the board is open.
 @MainActor
 final class SlackTasksModel: ObservableObject {
+    static let tasksPage = "tasks"
+
     @Published private(set) var tags: [SlackTag] = []
     @Published private(set) var tasks: [SlackTask] = []
-    @Published private(set) var selectedTag: String = UserDefaults.standard.string(forKey: "slackTagSelected") ?? "todo"
+    @Published private(set) var selectedPage: String = UserDefaults.standard.string(forKey: "slackTagSelected") ?? SlackTasksModel.tasksPage
+    @Published private(set) var collapsed: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "slackTagsCollapsed") ?? [])
+    @Published private(set) var addTagID: String = UserDefaults.standard.string(forKey: "slackAddTag") ?? "todo"
     @Published var showArchived = false
     @Published var notice: String?
 
@@ -16,11 +20,22 @@ final class SlackTasksModel: ObservableObject {
     private var noticeClear: Task<Void, Never>?
     private var showingError = false
 
-    var currentTag: SlackTag? { tags.first { $0.id == selectedTag } }
-    var groups: [(name: String, tasks: [SlackTask])] { currentTag.map { SlackBoard.groups(tasks, for: $0) } ?? [] }
+    var isTasksPage: Bool { selectedPage == Self.tasksPage }
+    var boardTags: [SlackTag] { tags.filter { $0.kind == .board } }
+    var listTags: [SlackTag] { tags.filter { $0.kind == .list } }
+    var currentListTag: SlackTag? { isTasksPage ? nil : listTags.first { $0.id == selectedPage } }
+    var pages: [(id: String, title: String)] { [(Self.tasksPage, "Tasks")] + listTags.map { ($0.id, $0.name) } }
+
+    var sections: [(tag: SlackTag, columns: [(name: String, tasks: [SlackTask])])] { SlackBoard.sections(tasks, tags: boardTags) }
+    var mergedColumns: [(name: String, tasks: [SlackTask])] { SlackBoard.merged(tasks, tags: boardTags) }
+    var listCards: [SlackTask] { currentListTag.map { SlackBoard.groups(tasks, for: $0).first?.tasks ?? [] } ?? [] }
     var archivedTasks: [SlackTask] { tasks.filter(\.archived) }
-    /// Cards in the last column count as done.
-    var doneColumn: String? { currentTag?.kind == .board ? currentTag?.columns.last : nil }
+    var hasActiveCards: Bool { tasks.contains { !$0.archived } }
+
+    /// The tag the paste field adds to on the Tasks page: the chosen one, else To-do, else the first board tag.
+    var addTag: SlackTag? { boardTags.first { $0.id == addTagID } ?? boardTags.first { $0.id == "todo" } ?? boardTags.first }
+
+    func tagName(_ id: String) -> String? { tags.first { $0.id == id }?.name }
 
     func start() {
         guard polling == nil else { return }
@@ -39,18 +54,30 @@ final class SlackTasksModel: ObservableObject {
         polling = nil
     }
 
-    func select(tag: String) {
-        guard tag != selectedTag else { return }
-        selectedTag = tag
-        UserDefaults.standard.set(tag, forKey: "slackTagSelected")
+    func select(page: String) {
+        guard page != selectedPage else { return }
+        selectedPage = page
+        UserDefaults.standard.set(page, forKey: "slackTagSelected")
         reload()
+    }
+
+    func setAddTag(_ id: String) {
+        addTagID = id
+        UserDefaults.standard.set(id, forKey: "slackAddTag")
+    }
+
+    func toggleCollapsed(_ tagID: String) {
+        if collapsed.contains(tagID) { collapsed.remove(tagID) } else { collapsed.insert(tagID) }
+        let live = Set(tags.map(\.id))
+        UserDefaults.standard.set(Array(collapsed.filter { live.contains($0) }).sorted(), forKey: "slackTagsCollapsed")
     }
 
     func add(_ text: String) {
         guard let link = SlackLink.parse(text) else { return say("That is not a Slack message link.") }
+        guard let target = isTasksPage ? addTag?.id : currentListTag?.id else { return say("Add a tag first.") }
         guard openStore() else { return }
         do {
-            switch try store!.add(link, tag: selectedTag) {
+            switch try store!.add(link, tag: target) {
             case .added: break
             case .exists: say("Already on this page.")
             case .restored: say("Restored from archive.")
@@ -59,8 +86,9 @@ final class SlackTasksModel: ObservableObject {
         } catch { fail(error) }
     }
 
-    func move(_ id: String, to column: String) {
-        guard let task = tasks.first(where: { $0.id == id }), task.status != column else { return }
+    /// Changes a card's status. In a tag's section (`tag` given) a card from another tag is ignored.
+    func move(_ id: String, to column: String, inSection tag: String?) {
+        guard let task = tasks.first(where: { $0.id == id }), task.status != column, tag == nil || task.tag == tag else { return }
         write { try $0.setStatus(column, for: id) }
     }
 
@@ -99,9 +127,14 @@ final class SlackTasksModel: ObservableObject {
         do {
             let version = try store.dataVersion()
             let loaded = try store.tags()
-            if !loaded.contains(where: { $0.id == selectedTag }), let first = loaded.first { selectedTag = first.id }
+            if !isTasksPage, !loaded.contains(where: { $0.id == selectedPage && $0.kind == .list }) {
+                selectedPage = Self.tasksPage
+                UserDefaults.standard.set(Self.tasksPage, forKey: "slackTagSelected")
+            }
             tags = loaded
-            tasks = try store.tasks(tag: selectedTag, includeArchived: true)
+            tasks = isTasksPage
+                ? try store.tasks(tags: loaded.filter { $0.kind == .board }.map(\.id), includeArchived: true)
+                : try store.tasks(tag: selectedPage, includeArchived: true)
             lastVersion = version
             if showingError { notice = nil; showingError = false }
         } catch { fail(error) }

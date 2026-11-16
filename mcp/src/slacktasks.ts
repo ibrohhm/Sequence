@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { STANDARD_COLUMNS } from "./slackdb.ts";
 import { getSlackTag } from "./slacktags.ts";
 
 export type UpsertInput = {
@@ -116,7 +117,7 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(tagId, channel, threadTs, root, input.channel_name, input.snippet, replies, replies, lastReply, iso(now).slice(0, 10), synced,
         input.summary ?? null, input.summary !== undefined ? (input.next_action ?? null) : null, input.summary !== undefined ? replies : null,
-        isList ? "" : (tag.columns[0] ?? ""), nextNumber());
+        isList ? "" : STANDARD_COLUMNS[0], nextNumber());
     const isStale = stale(threadTs);
     db.exec("COMMIT");
     return result("created", threadTs, isStale);

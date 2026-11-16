@@ -1,11 +1,12 @@
 import SwiftUI
 import StudioCore
 
-/// The Slack tasks pages: one tab per tag, each a board of columns or a plain list.
+/// The Tasks page (every board tag as a section, or all merged into one board) and one page per list tag.
 struct SlackTasksView: View {
     @EnvironmentObject var model: AppModel
     @StateObject private var board = SlackTasksModel()
     @Environment(\.openWindow) private var openWindow
+    @AppStorage("groupTasksByTag") private var grouped = true
     @State private var link = ""
 
     var body: some View {
@@ -21,19 +22,10 @@ struct SlackTasksView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
-                    if board.currentTag?.kind == .list {
-                        listPage
+                    if board.isTasksPage {
+                        if grouped { sectionsPage } else { mergedPage }
                     } else {
-                        let groups = board.groups
-                        HStack(alignment: .top, spacing: 12) {
-                            ForEach(Array(groups.enumerated()), id: \.element.name) { index, group in
-                                BoardColumn(name: group.name, icon: columnIcon(index, of: groups.count), count: group.tasks.count,
-                                            onDrop: { ids in drop(ids, on: group.name) }) {
-                                    ForEach(group.tasks) { card($0, list: false) }
-                                }
-                            }
-                        }
-                        .padding(16)
+                        listPage
                     }
                     if board.showArchived { archived }
                 }
@@ -47,8 +39,16 @@ struct SlackTasksView: View {
 
     private var titleBar: some View {
         HStack(spacing: 10) {
-            Text("Slack tasks").font(.system(size: 15, weight: .semibold))
+            Text(board.isTasksPage ? "Tasks" : (board.currentListTag?.name ?? "Tasks")).font(.system(size: 15, weight: .semibold))
             Spacer(minLength: 0)
+            if board.isTasksPage, let target = board.addTag {
+                Menu {
+                    ForEach(board.boardTags) { tag in Button(tag.name) { board.setAddTag(tag.id) } }
+                } label: {
+                    Text("Add to \(target.name)").font(.system(size: 12))
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+            }
             TextField("Paste a Slack link", text: $link)
                 .textFieldStyle(.plain).font(.system(size: 13))
                 .padding(.horizontal, 10).padding(.vertical, 6).frame(width: 240)
@@ -65,8 +65,8 @@ struct SlackTasksView: View {
     private var tabBar: some View {
         HStack(spacing: 12) {
             HStack(spacing: 2) {
-                ForEach(board.tags) { tag in
-                    TagTab(name: tag.name, selected: tag.id == board.selectedTag) { board.select(tag: tag.id) }
+                ForEach(board.pages, id: \.id) { page in
+                    TagTab(name: page.title, selected: page.id == board.selectedPage) { board.select(page: page.id) }
                 }
             }
             .padding(3)
@@ -85,9 +85,56 @@ struct SlackTasksView: View {
 
     // MARK: Pages
 
+    /// Each board tag is a collapsible section with its own four columns.
+    private var sectionsPage: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            ForEach(board.sections, id: \.tag.id) { section in
+                VStack(alignment: .leading, spacing: 10) {
+                    sectionHeader(section.tag, count: section.columns.reduce(0) { $0 + $1.tasks.count })
+                    if !board.collapsed.contains(section.tag.id) {
+                        columnsRow(section.columns, section: section.tag.id)
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    /// Every board tag's cards in one set of four columns.
+    private var mergedPage: some View {
+        columnsRow(board.mergedColumns, section: nil).padding(16)
+    }
+
+    private func columnsRow(_ columns: [(name: String, tasks: [SlackTask])], section: String?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            ForEach(Array(columns.enumerated()), id: \.element.name) { index, column in
+                BoardColumn(name: column.name, icon: columnIcon(index, of: columns.count), count: column.tasks.count,
+                            onDrop: { ids in drop(ids, on: column.name, section: section) }) {
+                    ForEach(column.tasks) { card($0, list: false) }
+                }
+            }
+        }
+    }
+
+    private func sectionHeader(_ tag: SlackTag, count: Int) -> some View {
+        let isCollapsed = board.collapsed.contains(tag.id)
+        return Button { board.toggleCollapsed(tag.id) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isCollapsed ? "chevron.right" : "chevron.down").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary).frame(width: 12)
+                Text(tag.name).font(.system(size: 14, weight: .semibold))
+                CountChip(count: count)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(tag.name), \(count) tasks, \(isCollapsed ? "collapsed" : "expanded")")
+    }
+
     private var listPage: some View {
         VStack(spacing: 10) {
-            ForEach(board.groups.first?.tasks ?? []) { card($0, list: true) }
+            ForEach(board.listCards) { card($0, list: true) }
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 14).fill(model.theme.columnBackground))
@@ -100,6 +147,7 @@ struct SlackTasksView: View {
             ForEach(board.archivedTasks) { task in
                 HStack(spacing: 10) {
                     if let number = task.number { Text("#\(number)").font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(.secondary) }
+                    if board.isTasksPage { Chip(text: board.tagName(task.tag) ?? task.tag) }
                     Text(TaskCard.channelLabel(task)).font(.system(size: 12)).foregroundStyle(.secondary)
                     Text(TaskCard.title(task)).font(.system(size: 13)).lineLimit(1)
                     Spacer(minLength: 0)
@@ -117,11 +165,12 @@ struct SlackTasksView: View {
     }
 
     private func card(_ task: SlackTask, list: Bool) -> some View {
-        TaskCard(task: task, list: list, doneColumn: board.doneColumn, onArchive: { board.archive(task.id) })
+        TaskCard(task: task, list: list, doneColumn: list ? nil : SlackColumns.done, tagName: list ? nil : board.tagName(task.tag),
+                 onArchive: { board.archive(task.id) })
     }
 
-    private func drop(_ ids: [String], on column: String) -> Bool {
-        ids.forEach { board.move($0, to: column) }
+    private func drop(_ ids: [String], on column: String, section: String?) -> Bool {
+        ids.forEach { board.move($0, to: column, inSection: section) }
         return !ids.isEmpty
     }
 
@@ -132,17 +181,15 @@ struct SlackTasksView: View {
         return "circle.lefthalf.filled"
     }
 
-    private func emojiList(_ tag: SlackTag) -> String {
-        tag.reactions.isEmpty ? "none set" : tag.reactions.map { ":\($0):" }.joined(separator: " ")
-    }
-
     private var emptyText: String {
-        guard let tag = board.currentTag else { return "No tags yet." }
-        var parts: [String] = []
-        if !tag.reactions.isEmpty { parts.append("React with \(emojiList(tag)) on a Slack message") }
-        if tag.slackList == .saved { parts.append("save a message in Slack") }
-        let how = parts.isEmpty ? "Add this tag's emoji in Edit tags" : parts.joined(separator: " or ")
-        return "No cards yet. \(how), then tell Claude \"sync the \(tag.name) tag\"."
+        if let list = board.currentListTag {
+            var parts: [String] = []
+            if !list.reactions.isEmpty { parts.append("React with \(list.reactions.map { ":\($0):" }.joined(separator: " ")) on a Slack message") }
+            if list.slackList == .saved { parts.append("save a message in Slack") }
+            let how = parts.isEmpty ? "Add this tag's emoji in Edit tags" : parts.joined(separator: " or ")
+            return "Nothing here yet. \(how), then tell Claude \"sync the \(list.name) tag\"."
+        }
+        return "No tasks yet. Tag a Slack thread with one of your task emoji (see Edit tags…) or paste a link above, then tell Claude \"sync my Slack tasks\"."
     }
 }
 
@@ -186,9 +233,7 @@ private struct BoardColumn<Cards: View>: View {
             HStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 13)).foregroundStyle(.secondary)
                 Text(name).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text("\(count)").font(.system(size: 12, weight: .medium)).foregroundStyle(model.theme.chipText)
-                    .padding(.horizontal, 6).padding(.vertical, 1)
-                    .background(RoundedRectangle(cornerRadius: 5).fill(model.theme.chipFill))
+                CountChip(count: count)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 6).padding(.top, 4)
@@ -199,6 +244,17 @@ private struct BoardColumn<Cards: View>: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(model.theme.columnBackground))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(targeted ? model.theme.accent : Color.clear, lineWidth: 1.5))
         .dropDestination(for: String.self) { ids, _ in onDrop(ids) } isTargeted: { targeted = $0 }
+    }
+}
+
+private struct CountChip: View {
+    @EnvironmentObject var model: AppModel
+    let count: Int
+
+    var body: some View {
+        Text("\(count)").font(.system(size: 12, weight: .medium)).foregroundStyle(model.theme.chipText)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .background(RoundedRectangle(cornerRadius: 5).fill(model.theme.chipFill))
     }
 }
 
@@ -254,6 +310,7 @@ private struct TaskCard: View {
     let task: SlackTask
     let list: Bool
     let doneColumn: String?
+    var tagName: String?
     let onArchive: () -> Void
     @State private var hovering = false
 
@@ -272,6 +329,7 @@ private struct TaskCard: View {
             }
             if hasChips {
                 ChipFlow {
+                    if let tagName { Chip(text: tagName) }
                     if task.synced == nil {
                         Chip(text: "Waiting for sync")
                     } else if !list, let replies = task.replies {
@@ -312,7 +370,7 @@ private struct TaskCard: View {
     }
 
     private var hasChips: Bool {
-        task.synced == nil || (!list && task.replies != nil) || task.newReplies != nil || (!list && task.quietDays(now: Date(), doneColumn: doneColumn) != nil)
+        tagName != nil || task.synced == nil || (!list && task.replies != nil) || task.newReplies != nil || (!list && task.quietDays(now: Date(), doneColumn: doneColumn) != nil)
     }
 }
 

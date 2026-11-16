@@ -5,7 +5,7 @@ import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { SLACK_NUMBER_INDEX, SLACK_TAGS_DDL, SLACK_TASKS_DDL, dbPath, openDb } from "../src/slackdb.ts";
+import { SLACK_NUMBER_INDEX, SLACK_TAGS_DDL, SLACK_TASKS_DDL, STANDARD_COLUMNS, dbPath, openDb } from "../src/slackdb.ts";
 
 async function tmpFile(): Promise<string> {
   return join(await mkdtemp(join(tmpdir(), "slackdb-")), "nested", "deeper", "slack-tasks.db");
@@ -40,9 +40,9 @@ test("openDb creates the missing parent folder and the file", async () => {
   assert.ok((await stat(file)).isFile());
 });
 
-test("openDb sets user_version 4 and WAL mode", async () => {
+test("openDb sets user_version 5 and WAL mode", async () => {
   const db = openDb(await tmpFile());
-  assert.equal(version(db), 4);
+  assert.equal(version(db), 5);
   assert.equal((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
   db.close();
 });
@@ -104,7 +104,7 @@ test("openDb upgrades a v2 database with cards into the todo tag", async () => {
     { tag: "todo", thread_ts: "2.2", status: "Done", archived: 1, summary: null },
     { tag: "todo", thread_ts: "3.3", status: "In progress", archived: 0, summary: null },
   ]);
-  assert.equal(version(db), 4);
+  assert.equal(version(db), 5);
   assert.equal((db.prepare("SELECT COUNT(*) n FROM tags").get() as { n: number }).n, 2);
   db.close();
 });
@@ -116,7 +116,7 @@ test("openDb upgrades a v1 database through v2 to v3 and keeps its rows", async 
   for (const name of ["tag", "summary", "next_action", "summary_replies"]) assert.ok(columns(db).includes(name), name);
   const row = db.prepare("SELECT tag, status FROM tasks").get() as { tag: string; status: string };
   assert.deepEqual({ ...row }, { tag: "todo", status: "Blocked" });
-  assert.equal(version(db), 4);
+  assert.equal(version(db), 5);
   db.close();
   openDb(file).close();
 });
@@ -127,7 +127,7 @@ test("two opens on one old file at the same time both succeed", async () => {
   const a = openDb(file);
   const b = openDb(file);
   assert.equal((a.prepare("SELECT COUNT(*) n FROM tasks").get() as { n: number }).n, 1);
-  assert.equal(version(b), 4);
+  assert.equal(version(b), 5);
   a.close();
   b.close();
 });
@@ -179,7 +179,7 @@ test("openDb upgrades a v3 database and numbers the cards by tagged date then ro
     { tag: "saved", thread_ts: "1.1", status: "", number: 2 },
     { tag: "todo", thread_ts: "3.3", status: "Blocked", number: 3 },
   ]);
-  assert.equal(version(db), 4);
+  assert.equal(version(db), 5);
   db.close();
   openDb(file).close();
 });
@@ -202,4 +202,57 @@ test("openDb numbers cards an older build left without a number, after the highe
   const rows = db.prepare("SELECT thread_ts, number FROM tasks ORDER BY thread_ts").all().map((r) => ({ ...r }));
   assert.deepEqual(rows, [{ thread_ts: "1.1", number: 8 }, { thread_ts: "2.2", number: 7 }]);
   db.close();
+});
+
+const V4_TASKS_DDL = SLACK_TASKS_DDL.replace("CREATE TABLE IF NOT EXISTS tasks", "CREATE TABLE tasks");
+const STANDARD_JSON = '["Todo","In progress","Blocked","Done"]';
+
+test("openDb upgrades a v4 database: board columns and statuses are normalised, list cards are left alone", async () => {
+  const file = await tmpFile();
+  mkdirSync(dirname(file), { recursive: true });
+  const old = new DatabaseSync(file);
+  old.exec(SLACK_TAGS_DDL);
+  old.exec(V4_TASKS_DDL);
+  old.exec(SLACK_NUMBER_INDEX);
+  old.exec(`INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position, builtin) VALUES
+    ('todo','To-do','board','todo','["loading"]','${STANDARD_JSON}',0,1),
+    ('saved','Saved','list','saved','[]','[]',1,1),
+    ('ticket-oncall','Ticket Oncall','board','none','["ticket"]','["Todo","Inprogress","Blocked","Done"]',2,0)`);
+  const statuses: [string, string][] = [["ticket-oncall", "Inprogress"], ["todo", "in-progress"], ["todo", "IN PROGRESS"], ["todo", "DONE"], ["todo", "weird"], ["todo", ""], ["todo", "Blocked"], ["saved", ""]];
+  statuses.forEach(([tag, status], i) => old.prepare("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number) VALUES (?,?,?,?,?,?,?)").run(tag, "C", `${i}.1`, "p", "2026-11-16", status, i + 1));
+  old.exec("PRAGMA user_version = 4");
+  old.close();
+  const db = openDb(file);
+  const got = db.prepare("SELECT status FROM tasks ORDER BY number").all().map((r) => (r as { status: string }).status);
+  assert.deepEqual(got, ["In progress", "In progress", "In progress", "Done", "Todo", "Todo", "Blocked", ""]);
+  const columnsOf = Object.fromEntries(db.prepare("SELECT id, columns FROM tags").all().map((t) => [(t as { id: string }).id, (t as { columns: string }).columns]));
+  assert.equal(columnsOf["todo"], STANDARD_JSON);
+  assert.equal(columnsOf["ticket-oncall"], STANDARD_JSON);
+  assert.equal(columnsOf["saved"], "[]");
+  assert.equal(version(db), 5);
+  db.close();
+  const again = openDb(file);
+  assert.deepEqual(again.prepare("SELECT status FROM tasks ORDER BY number").all().map((r) => (r as { status: string }).status), got);
+  again.close();
+});
+
+test("two opens on one v4 file both succeed", async () => {
+  const file = await tmpFile();
+  openDb(file).close();
+  const raw = new DatabaseSync(file);
+  raw.exec("PRAGMA user_version = 4");
+  raw.close();
+  const a = openDb(file);
+  const b = openDb(file);
+  assert.equal(version(b), 5);
+  a.close();
+  b.close();
+});
+
+test("the Swift column constant equals STANDARD_COLUMNS", async () => {
+  const swift = await readFile(join(import.meta.dirname, "..", "..", "Sources", "StudioCore", "SlackColumns.swift"), "utf8");
+  const match = /static let all(?::\s*\[String\])?\s*=\s*\[([^\]]*)\]/.exec(swift);
+  assert.ok(match, "SlackColumns.swift must define static let all");
+  const names = [...match[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
+  assert.deepEqual(names, STANDARD_COLUMNS);
 });

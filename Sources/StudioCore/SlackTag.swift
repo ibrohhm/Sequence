@@ -29,8 +29,12 @@ public struct SlackTag: Identifiable, Equatable, Sendable {
 }
 
 public enum SlackTagRules {
-    /// A lowercase dashed id from a name, made unique against `existing` with a numeric suffix.
+    /// Ids a tag may never take: the app uses them for its own pages.
+    private static let reserved: Set<String> = ["tasks"]
+
+    /// A lowercase dashed id from a name, made unique against `existing` (and the reserved ids) with a numeric suffix.
     public static func slug(for name: String, existing: Set<String>) -> String {
+        let taken = existing.union(reserved)
         var slug = ""
         for scalar in name.lowercased().unicodeScalars {
             let alphanumeric = scalar.isASCII && (CharacterSet.alphanumerics.contains(scalar))
@@ -38,30 +42,17 @@ public enum SlackTagRules {
         }
         slug = slug.trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         if slug.isEmpty { slug = "tag" }
-        guard existing.contains(slug) else { return slug }
+        guard taken.contains(slug) else { return slug }
         var number = 2
-        while existing.contains("\(slug)-\(number)") { number += 1 }
+        while taken.contains("\(slug)-\(number)") { number += 1 }
         return "\(slug)-\(number)"
     }
 
-    /// A message describing the first problem with a tag's settings, or nil when they are fine.
-    public static func validate(name: String, kind: SlackTagKind, reactions: [String], columns: [String]) -> String? {
+    /// A message describing the first problem with a tag's name or emoji names, or nil when they are fine.
+    public static func validate(name: String, reactions: [String]) -> String? {
         if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "Give the tag a name." }
         for reaction in reactions where reaction.range(of: "^[a-z0-9_+-]+$", options: .regularExpression) == nil {
             return "\"\(reaction)\" is not an emoji name (lowercase letters, digits, _ + - only, no colons)."
-        }
-        switch kind {
-        case .list:
-            if !columns.isEmpty { return "A list has no columns." }
-        case .board:
-            if columns.isEmpty { return "A board needs at least one column." }
-            if columns.count > 8 { return "A board can have at most 8 columns." }
-            var seen = Set<String>()
-            for column in columns {
-                let trimmed = column.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty { return "A column needs a name." }
-                if !seen.insert(trimmed.lowercased()).inserted { return "Two columns are named \"\(trimmed)\"." }
-            }
         }
         return nil
     }

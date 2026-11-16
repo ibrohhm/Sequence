@@ -271,11 +271,11 @@ test("a board tag without replies is rejected", async () => {
   assert.equal(rows(db).length, 0);
 });
 
-test("a new card takes the first column of a custom tag", async () => {
+test("a new board card starts in Todo whatever the tag's stored columns are", async () => {
   const { db } = await fresh();
   addTag(db, "review", "board", ["Open", "Done"]);
   upsertSlackTask(db, { ...BASE, tag: "review" }, NOW);
-  assert.equal(rows(db)[0].status, "Open");
+  assert.equal(rows(db)[0].status, "Todo");
 });
 
 import { getSlackTask } from "../src/slacktasks.ts";

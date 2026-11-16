@@ -100,7 +100,7 @@ public final class SlackTaskStore {
 
     private func upgrade() throws {
         let version = try rows("PRAGMA user_version", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 0
-        guard version < 4 else { return }
+        guard version < 5 else { return }
         try exec("BEGIN IMMEDIATE")
         do {
             let have = Set(try rows("PRAGMA table_info(tasks)", []) { String(cString: sqlite3_column_text($0, 1)) })
@@ -130,7 +130,17 @@ public final class SlackTaskStore {
             }
             try assignMissingNumbers()
             try exec(Self.numberIndexDDL)
-            try exec("PRAGMA user_version = 4")
+            let standard = Self.encodeList(SlackColumns.all)
+            let boardTags = try rows("SELECT id FROM tags WHERE kind = 'board'", []) { String(cString: sqlite3_column_text($0, 0)) }
+            for id in boardTags {
+                try run("UPDATE tags SET columns = ? WHERE id = ?", [.text(standard), .text(id)])
+                let cards = try rows("SELECT rowid, status FROM tasks WHERE tag = ?", [.text(id)]) { (Int(sqlite3_column_int64($0, 0)), String(cString: sqlite3_column_text($0, 1))) }
+                for (rowid, status) in cards {
+                    let next = SlackColumns.canonical(status) ?? SlackColumns.all[0]
+                    if next != status { try run("UPDATE tasks SET status = ? WHERE rowid = ?", [.text(next), .int(rowid)]) }
+                }
+            }
+            try exec("PRAGMA user_version = 5")
             try exec("COMMIT")
         } catch {
             try? exec("ROLLBACK")
@@ -149,18 +159,16 @@ public final class SlackTaskStore {
         }
     }
 
-    /// Adds or updates a tag. Column renames and removals move that tag's cards in the same transaction.
-    /// A built-in tag keeps its kind and Slack list; a new tag goes after the others.
-    public func saveTag(_ tag: SlackTag, renames: [String: String] = [:]) throws {
+    /// Adds or updates a tag. A board tag always has the standard columns; a built-in tag keeps its kind and Slack list;
+    /// a new tag goes after the others.
+    public func saveTag(_ tag: SlackTag) throws {
         try exec("BEGIN IMMEDIATE")
         do {
             let existing = try tags().first { $0.id == tag.id }
             let kind = (existing?.builtin == true) ? existing!.kind : tag.kind
-            if let message = SlackTagRules.validate(name: tag.name, kind: kind, reactions: tag.reactions, columns: tag.columns) {
-                throw SlackStoreError(message: message)
-            }
+            if let message = SlackTagRules.validate(name: tag.name, reactions: tag.reactions) { throw SlackStoreError(message: message) }
             let reactions = Self.encodeList(tag.reactions)
-            let columns = Self.encodeList(tag.columns)
+            let columns = Self.encodeList(kind == .board ? SlackColumns.all : [])
             if existing != nil {
                 try run("UPDATE tags SET name = ?, kind = ?, reactions = ?, columns = ? WHERE id = ?",
                         [.text(tag.name), .text(kind.rawValue), .text(reactions), .text(columns), .text(tag.id)])
@@ -168,21 +176,6 @@ public final class SlackTaskStore {
                 let next = (try rows("SELECT COALESCE(MAX(position), -1) + 1 FROM tags", []) { Int(sqlite3_column_int64($0, 0)) }.first) ?? 0
                 try run("INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position, builtin) VALUES (?, ?, ?, 'none', ?, ?, ?, 0)",
                         [.text(tag.id), .text(tag.name), .text(kind.rawValue), .text(reactions), .text(columns), .int(next)])
-            }
-            if kind == .board {
-                let live = renames.filter { $0.key != $0.value }
-                if !live.isEmpty {
-                    let cases = live.map { _ in "WHEN ? THEN ?" }.joined(separator: " ")
-                    let marks = live.map { _ in "?" }.joined(separator: ",")
-                    var binds: [Bind] = []
-                    for (old, new) in live { binds += [.text(old), .text(new)] }
-                    binds.append(.text(tag.id))
-                    binds += live.keys.map { .text($0) }
-                    try run("UPDATE tasks SET status = CASE status \(cases) ELSE status END WHERE tag = ? AND status IN (\(marks))", binds)
-                }
-                let marks = tag.columns.map { _ in "?" }.joined(separator: ",")
-                try run("UPDATE tasks SET status = ? WHERE tag = ? AND status NOT IN (\(marks))",
-                        [.text(tag.columns[0]), .text(tag.id)] + tag.columns.map { .text($0) })
             }
             try exec("COMMIT")
         } catch {
@@ -238,6 +231,11 @@ public final class SlackTaskStore {
         }
     }
 
+    /// The cards of several tags, one tag after another.
+    public func tasks(tags: [String], includeArchived: Bool) throws -> [SlackTask] {
+        try tags.flatMap { try tasks(tag: $0, includeArchived: includeArchived) }
+    }
+
     public func setStatus(_ status: String, for id: String) throws {
         let (tag, channel, thread) = Self.split(id)
         try run("UPDATE tasks SET status = ? WHERE tag = ? AND channel_id = ? AND thread_ts = ?", [.text(status), .text(tag), .text(channel), .text(thread)])
@@ -264,7 +262,7 @@ public final class SlackTaskStore {
                 }
             } else {
                 let tagged = String(ISO8601DateFormatter().string(from: now).prefix(10))
-                let status = found.kind == .list ? "" : (found.columns.first ?? "")
+                let status = found.kind == .list ? "" : SlackColumns.all[0]
                 let number = try rows("SELECT COALESCE(MAX(number), 0) + 1 FROM tasks", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 1
                 try run("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         [.text(tag), .text(link.channelID), .text(link.rootTS), .text(link.permalink), .text(tagged), .text(status), .int(number)])

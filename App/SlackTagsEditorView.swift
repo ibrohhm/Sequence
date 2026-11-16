@@ -4,12 +4,6 @@ import StudioCore
 /// State behind the Slack tags window: the tag list and the tag being edited.
 @MainActor
 final class SlackTagsEditorModel: ObservableObject {
-    struct Column: Identifiable {
-        let id = UUID()
-        var original: String?
-        var name: String
-    }
-
     struct Draft {
         var id: String
         var isNew: Bool
@@ -18,7 +12,6 @@ final class SlackTagsEditorModel: ObservableObject {
         var name: String
         var kind: SlackTagKind
         var reactionsText: String
-        var columns: [Column]
     }
 
     @Published private(set) var tags: [SlackTag] = []
@@ -42,28 +35,23 @@ final class SlackTagsEditorModel: ObservableObject {
     private func loadDraft() {
         guard let tag = tags.first(where: { $0.id == selectedID }) else { return draft = nil }
         draft = Draft(id: tag.id, isNew: false, builtin: tag.builtin, slackList: tag.slackList, name: tag.name, kind: tag.kind,
-                      reactionsText: tag.reactions.joined(separator: ", "), columns: tag.columns.map { Column(original: $0, name: $0) })
+                      reactionsText: tag.reactions.joined(separator: ", "))
     }
 
     func addTag() {
         selectedID = nil
-        draft = Draft(id: "", isNew: true, builtin: false, slackList: .none, name: "New tag", kind: .board, reactionsText: "",
-                      columns: ["Todo", "In progress", "Blocked", "Done"].map { Column(original: nil, name: $0) })
+        draft = Draft(id: "", isNew: true, builtin: false, slackList: .none, name: "New tag", kind: .board, reactionsText: "")
     }
 
     func save() {
-        guard var draft, let store else { return }
+        guard let draft, let store else { return }
         let reactions = draft.reactionsText.split(whereSeparator: { $0 == "," || $0 == " " })
             .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ": ")).lowercased() }.filter { !$0.isEmpty }
-        let columns = draft.columns.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) }
-        var renames: [String: String] = [:]
-        for (column, name) in zip(draft.columns, columns) { if let old = column.original, old != name { renames[old] = name } }
-        if draft.kind == .list { draft.columns = [] }
         let id = draft.isNew ? SlackTagRules.slug(for: draft.name, existing: Set(tags.map(\.id))) : draft.id
         let tag = SlackTag(id: id, name: draft.name.trimmingCharacters(in: .whitespacesAndNewlines), kind: draft.kind, slackList: draft.slackList,
-                           reactions: reactions, columns: draft.kind == .list ? [] : columns, position: 0, builtin: draft.builtin)
+                           reactions: reactions, columns: [], position: 0, builtin: draft.builtin)
         do {
-            try store.saveTag(tag, renames: renames)
+            try store.saveTag(tag)
             tags = try store.tags()
             selectedID = id
             loadDraft()
@@ -85,14 +73,6 @@ final class SlackTagsEditorModel: ObservableObject {
             try store.moveTag(id, to: index + offset)
             tags = try store.tags()
         } catch { self.error = error.localizedDescription }
-    }
-
-    func addColumn() { draft?.columns.append(Column(original: nil, name: "New column")) }
-    func removeColumn(_ id: UUID) { draft?.columns.removeAll { $0.id == id } }
-
-    func moveColumn(_ id: UUID, by offset: Int) {
-        guard let columns = draft?.columns, let index = columns.firstIndex(where: { $0.id == id }), columns.indices.contains(index + offset) else { return }
-        draft?.columns.swapAt(index, index + offset)
     }
 }
 
@@ -153,20 +133,7 @@ struct SlackTagsEditorView: View {
                 TextField("Emoji names", text: Binding(get: { draft.reactionsText }, set: { editor.draft?.reactionsText = $0 }),
                           prompt: Text("loading, loading1  (no colons)"))
                 if draft.kind == .board {
-                    Section("Columns (the first is where new cards land, the last counts as done)") {
-                        ForEach(draft.columns) { column in
-                            HStack {
-                                TextField("Column", text: Binding(
-                                    get: { editor.draft?.columns.first { $0.id == column.id }?.name ?? "" },
-                                    set: { value in if let i = editor.draft?.columns.firstIndex(where: { $0.id == column.id }) { editor.draft?.columns[i].name = value } }
-                                ))
-                                Button { editor.moveColumn(column.id, by: -1) } label: { Image(systemName: "arrow.up") }
-                                Button { editor.moveColumn(column.id, by: 1) } label: { Image(systemName: "arrow.down") }
-                                Button { editor.removeColumn(column.id) } label: { Image(systemName: "minus.circle") }
-                            }
-                        }
-                        Button("Add column") { editor.addColumn() }
-                    }
+                    LabeledContent("Columns", value: SlackColumns.all.joined(separator: ", "))
                 }
                 HStack {
                     Button("Save") { editor.save() }.keyboardShortcut(.defaultAction)

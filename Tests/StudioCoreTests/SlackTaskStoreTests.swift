@@ -58,7 +58,7 @@ import Testing
         let path = tempPath()
         let store = try SlackTaskStore(path: path)
         #expect(FileManager.default.fileExists(atPath: path))
-        #expect(rawText(path, "PRAGMA user_version") == "4")
+        #expect(rawText(path, "PRAGMA user_version") == "5")
         #expect(rawText(path, "PRAGMA journal_mode") == "wal")
         #expect(try store.tags().map(\.id) == ["todo", "saved"])
         _ = try SlackTaskStore(path: path)
@@ -86,7 +86,7 @@ import Testing
         #expect(tasks.map(\.status) == ["Blocked", "Done", "In progress"])
         #expect(tasks.map(\.archived) == [false, true, false])
         #expect(tasks[0].summary == "Waiting on vendor." && tasks[0].summaryReplies == 2)
-        #expect(rawText(path, "PRAGMA user_version") == "4")
+        #expect(rawText(path, "PRAGMA user_version") == "5")
         #expect(try store.tags().count == 2)
         _ = try SlackTaskStore(path: path)
     }
@@ -102,7 +102,7 @@ import Testing
         let task = try #require(try store.tasks(tag: "todo", includeArchived: false).first)
         #expect(task.status == "Blocked")
         #expect(task.summary == nil && task.nextAction == nil && task.summaryReplies == nil)
-        #expect(rawText(path, "PRAGMA user_version") == "4")
+        #expect(rawText(path, "PRAGMA user_version") == "5")
     }
 
     @Test func addInsertsAPastedLinkInTheFirstColumnWithoutFacts() throws {
@@ -218,30 +218,15 @@ import Testing
         try store.saveTag(review())
         let tags = try store.tags()
         #expect(tags.map(\.id) == ["todo", "saved", "review"])
-        #expect(tags[2].position == 2 && tags[2].reactions == ["eyes"] && tags[2].columns == ["Open", "Waiting", "Done"] && !tags[2].builtin)
+        #expect(tags[2].position == 2 && tags[2].reactions == ["eyes"] && tags[2].columns == SlackColumns.all && !tags[2].builtin)
     }
 
     @Test func saveTagRejectsInvalidInputBeforeTouchingAnything() throws {
         let store = try SlackTaskStore(path: tempPath())
-        #expect(throws: SlackStoreError.self) { try store.saveTag(review(columns: [])) }
+        var unnamed = review()
+        unnamed.name = "  "
+        #expect(throws: SlackStoreError.self) { try store.saveTag(unnamed) }
         #expect(try store.tags().count == 2)
-    }
-
-    @Test func renamingAndRemovingColumnsMovesCardsInTheSameSave() throws {
-        let store = try SlackTaskStore(path: tempPath())
-        try store.saveTag(review())
-        _ = try store.add(rootLink, tag: "review", now: now)
-        _ = try store.add(otherLink, tag: "review", now: now)
-        let ids = try store.tasks(tag: "review", includeArchived: false).map(\.id)
-        let waiting = try #require(ids.first)
-        try store.setStatus("Waiting", for: waiting)
-        try store.setStatus("Done", for: try #require(ids.last))
-        var edited = review(columns: ["Open", "Blocked"])
-        edited.name = "Review"
-        try store.saveTag(edited, renames: ["Waiting": "Blocked"])
-        let byID = Dictionary(uniqueKeysWithValues: try store.tasks(tag: "review", includeArchived: false).map { ($0.id, $0.status) })
-        #expect(byID[waiting] == "Blocked")
-        #expect(byID[try #require(ids.last)] == "Open")
     }
 
     @Test func deletingACustomTagKeepsItsCardsAndRecreatingShowsThemAgain() throws {
@@ -266,7 +251,7 @@ import Testing
         todo.columns = ["A"]
         try store.saveTag(todo)
         let saved = try #require(try store.tags().first)
-        #expect(saved.kind == .board && saved.slackList == .todo && saved.name == "Mine" && saved.columns == ["A"])
+        #expect(saved.kind == .board && saved.slackList == .todo && saved.name == "Mine" && saved.columns == SlackColumns.all)
     }
 
     @Test func moveTagReordersWithoutGaps() throws {
@@ -297,7 +282,7 @@ import Testing
         #expect(todo.map(\.number) == [1, 3])
         #expect(todo.map(\.status) == ["Done", "Blocked"])
         #expect(saved.map(\.number) == [2])
-        #expect(rawText(path, "PRAGMA user_version") == "4")
+        #expect(rawText(path, "PRAGMA user_version") == "5")
         _ = try SlackTaskStore(path: path)
     }
 
@@ -334,5 +319,61 @@ import Testing
         let store = try SlackTaskStore(path: path)
         let tasks = try store.tasks(tag: "todo", includeArchived: true).sorted { $0.threadTS < $1.threadTS }
         #expect(tasks.map(\.number) == [8, 7])
+    }
+
+    @Test func upgradesAV4DatabaseNormalisingBoardStatusesAndColumns() throws {
+        let path = tempPath()
+        try prepareFolder(path)
+        let statuses = [("ticket-oncall", "Inprogress"), ("todo", "in-progress"), ("todo", "IN PROGRESS"), ("todo", "DONE"), ("todo", "weird"),
+                        ("todo", ""), ("todo", "Blocked"), ("saved", "")]
+        var sql = SlackTaskStore.tagsDDL + ";\n" + SlackTaskStore.tasksDDL + ";\n" + SlackTaskStore.numberIndexDDL + ";\n"
+        sql += """
+        INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position, builtin) VALUES
+          ('todo', 'To-do', 'board', 'todo', '["loading"]', '["Todo","In progress","Blocked","Done"]', 0, 1),
+          ('saved', 'Saved', 'list', 'saved', '[]', '[]', 1, 1),
+          ('ticket-oncall', 'Ticket Oncall', 'board', 'none', '["ticket"]', '["Todo","Inprogress","Blocked","Done"]', 2, 0);
+
+        """
+        for (index, entry) in statuses.enumerated() {
+            sql += "INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number) VALUES ('\(entry.0)', 'C', '\(index).1', 'p', '2026-11-16', '\(entry.1)', \(index + 1));\n"
+        }
+        sql += "PRAGMA user_version = 4;"
+        raw(path, sql)
+        let store = try SlackTaskStore(path: path)
+        func statusesNow() throws -> [String] {
+            try ["todo", "ticket-oncall", "saved"].flatMap { try store.tasks(tag: $0, includeArchived: true) }
+                .sorted { ($0.number ?? 0) < ($1.number ?? 0) }.map(\.status)
+        }
+        let expected = ["In progress", "In progress", "In progress", "Done", "Todo", "Todo", "Blocked", ""]
+        #expect(try statusesNow() == expected)
+        let tags = Dictionary(uniqueKeysWithValues: try store.tags().map { ($0.id, $0.columns) })
+        #expect(tags["todo"] == SlackColumns.all && tags["ticket-oncall"] == SlackColumns.all && tags["saved"] == [])
+        #expect(rawText(path, "PRAGMA user_version") == "5")
+        _ = try SlackTaskStore(path: path)
+        #expect(try statusesNow() == expected)
+    }
+
+    @Test func saveTagStoresTheStandardColumnsForABoardAndNoneForAList() throws {
+        let store = try SlackTaskStore(path: tempPath())
+        try store.saveTag(review(columns: ["Only"]))
+        var links = review()
+        links = SlackTag(id: "links", name: "Links", kind: .list, slackList: .none, reactions: [], columns: ["Ignored"], position: 0, builtin: false)
+        try store.saveTag(links)
+        let byID = Dictionary(uniqueKeysWithValues: try store.tags().map { ($0.id, $0) })
+        #expect(byID["review"]?.columns == SlackColumns.all)
+        #expect(byID["links"]?.columns == [])
+    }
+
+    @Test func tasksForSeveralTagsReturnsAllOfThem() throws {
+        let store = try SlackTaskStore(path: tempPath())
+        try store.saveTag(review())
+        _ = try store.add(rootLink, tag: "todo", now: now)
+        _ = try store.add(otherLink, tag: "review", now: now)
+        _ = try store.add(rootLink, tag: "saved", now: now)
+        let todo = try #require(try store.tasks(tag: "todo", includeArchived: false).first)
+        try store.setArchived(true, for: todo.id)
+        #expect(try store.tasks(tags: ["todo", "review"], includeArchived: false).map(\.tag) == ["review"])
+        #expect(Set(try store.tasks(tags: ["todo", "review"], includeArchived: true).map(\.tag)) == ["todo", "review"])
+        #expect(try store.tasks(tags: [], includeArchived: true).isEmpty)
     }
 }

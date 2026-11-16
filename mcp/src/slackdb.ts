@@ -37,6 +37,15 @@ export const SLACK_TASKS_DDL = `CREATE TABLE IF NOT EXISTS tasks (
 
 export const SLACK_NUMBER_INDEX = `CREATE UNIQUE INDEX IF NOT EXISTS tasks_number ON tasks(number)`;
 
+/** The columns every board tag shares; the last one counts as done. */
+export const STANDARD_COLUMNS = ["Todo", "In progress", "Blocked", "Done"];
+
+const CANONICAL: Record<string, string> = { todo: "Todo", inprogress: "In progress", blocked: "Blocked", done: "Done" };
+
+function canonicalStatus(status: string): string {
+  return CANONICAL[status.toLowerCase().replace(/[\s-]/g, "")] ?? STANDARD_COLUMNS[0];
+}
+
 const SUMMARY_COLUMNS: [string, string][] = [["summary", "TEXT"], ["next_action", "TEXT"], ["summary_replies", "INTEGER"]];
 const COPIED = "channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced, summary, next_action, summary_replies, archived";
 
@@ -62,7 +71,7 @@ function ensureNumbers(db: DatabaseSync): void {
 
 function upgrade(db: DatabaseSync): void {
   const version = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
-  if (version >= 4) return;
+  if (version >= 5) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     const names = () => new Set((db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]).map((c) => c.name));
@@ -85,7 +94,15 @@ function upgrade(db: DatabaseSync): void {
     }
     assignMissingNumbers(db);
     db.exec(SLACK_NUMBER_INDEX);
-    db.exec("PRAGMA user_version = 4");
+    const standard = JSON.stringify(STANDARD_COLUMNS);
+    for (const { id } of db.prepare("SELECT id FROM tags WHERE kind = 'board'").all() as { id: string }[]) {
+      db.prepare("UPDATE tags SET columns = ? WHERE id = ?").run(standard, id);
+      for (const card of db.prepare("SELECT rowid AS rid, status FROM tasks WHERE tag = ?").all(id) as { rid: number; status: string }[]) {
+        const next = canonicalStatus(card.status);
+        if (next !== card.status) db.prepare("UPDATE tasks SET status = ? WHERE rowid = ?").run(next, card.rid);
+      }
+    }
+    db.exec("PRAGMA user_version = 5");
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");

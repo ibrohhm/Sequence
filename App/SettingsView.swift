@@ -13,7 +13,7 @@ struct SettingsView: View {
             VaultsView().tabItem { Label("Vaults", systemImage: "folder") }.tag(SettingsTab.vaults.rawValue)
             AboutView().tabItem { Label("About", systemImage: "info.circle") }.tag(SettingsTab.about.rawValue)
         }
-        .frame(width: 480, height: 440)
+        .frame(width: 480, height: 480)
         .preferredColorScheme((Theme(rawValue: theme) ?? .light).colorScheme)
     }
 }
@@ -23,6 +23,7 @@ private struct GeneralSettings: View {
     @AppStorage("aiEditorEnabled") private var aiEnabled = true
     @AppStorage("showFolderIcons") private var showFolderIcons = true
     @AppStorage("showFileIcons") private var showFileIcons = true
+    @AppStorage("groupTasksByTag") private var groupTasksByTag = true
 
     var body: some View {
         Form {
@@ -35,6 +36,11 @@ private struct GeneralSettings: View {
             Section("Sidebar") {
                 Toggle("Show folder icons", isOn: $showFolderIcons)
                 Toggle("Show file icons", isOn: $showFileIcons)
+            }
+            Section("Tasks") {
+                Toggle("Group tasks by tag", isOn: $groupTasksByTag)
+                Text("Off shows every tag's tasks together in one set of columns.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Show AI editor", isOn: $aiEnabled)
