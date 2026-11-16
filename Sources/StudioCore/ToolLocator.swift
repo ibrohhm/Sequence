@@ -20,14 +20,16 @@ public struct ToolLocator {
 
     private let searchDirs: [URL]
     private let overrides: [String: URL]
+    private let versionCheckTimeout: TimeInterval
 
-    public init(searchDirs: [URL] = ToolLocator.defaultDirs, overrides: [String: URL] = [:]) {
+    public init(searchDirs: [URL] = ToolLocator.defaultDirs, overrides: [String: URL] = [:], versionCheckTimeout: TimeInterval = 10) {
         self.searchDirs = searchDirs
         self.overrides = overrides
+        self.versionCheckTimeout = versionCheckTimeout
     }
 
     public func java() throws -> URL {
-        guard let url = find("java", verify: Self.runsVersionCheck) else { throw ToolError.javaMissing }
+        guard let url = find("java", verify: { Self.runsVersionCheck($0, timeout: versionCheckTimeout) }) else { throw ToolError.javaMissing }
         return url
     }
 
@@ -46,14 +48,21 @@ public struct ToolLocator {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0.path) && verify($0) }
     }
 
-    private static func runsVersionCheck(_ url: URL) -> Bool {
+    /// Runs `java -version` and waits for it without servicing the caller's run loop (`waitUntilExit` does, which let
+    /// other main-thread events run while SwiftUI was creating the app model). A runtime that hangs counts as missing.
+    private static func runsVersionCheck(_ url: URL, timeout: TimeInterval) -> Bool {
         let process = Process()
         process.executableURL = url
         process.arguments = ["-version"]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
         do { try process.run() } catch { return false }
-        process.waitUntilExit()
+        if finished.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            return false
+        }
         return process.terminationStatus == 0
     }
 }

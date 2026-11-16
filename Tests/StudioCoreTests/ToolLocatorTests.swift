@@ -9,9 +9,9 @@ private func makeDir() throws -> URL {
 }
 
 @discardableResult
-private func makeExecutable(_ name: String, in dir: URL, exitCode: Int32) throws -> URL {
+private func makeExecutable(_ name: String, in dir: URL, exitCode: Int32, sleeping seconds: Int = 0) throws -> URL {
     let url = dir.appendingPathComponent(name)
-    try "#!/bin/sh\nexit \(exitCode)\n".write(to: url, atomically: true, encoding: .utf8)
+    try "#!/bin/sh\n\(seconds > 0 ? "sleep \(seconds)\n" : "")exit \(exitCode)\n".write(to: url, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     return url
 }
@@ -66,5 +66,24 @@ private func makeExecutable(_ name: String, in dir: URL, exitCode: Int32) throws
         #expect(paths.contains("/usr/local/opt/openjdk/bin"))
         let firstStub = paths.firstIndex(of: "/usr/bin") ?? .max
         #expect((paths.firstIndex(of: "/usr/local/opt/openjdk/bin") ?? .max) < firstStub)
+    }
+
+    @Test func theJavaVersionCheckDoesNotRunTheCallersRunLoop() throws {
+        let dir = try makeDir()
+        try makeExecutable("java", in: dir, exitCode: 0, sleeping: 1)
+        final class Flag: @unchecked Sendable { var ran = false }
+        let flag = Flag()
+        RunLoop.current.perform(inModes: [.default]) { flag.ran = true }
+        _ = try ToolLocator(searchDirs: [dir]).java()
+        #expect(!flag.ran, "waiting for java must not process other events on the calling thread (it did, on the main thread, while SwiftUI was creating the app model)")
+    }
+
+    @Test func aJavaThatNeverExitsIsMissingAfterTheTimeout() throws {
+        let dir = try makeDir()
+        try makeExecutable("java", in: dir, exitCode: 0, sleeping: 30)
+        let locator = ToolLocator(searchDirs: [dir], versionCheckTimeout: 0.5)
+        let start = Date()
+        #expect(throws: ToolError.javaMissing) { try locator.java() }
+        #expect(Date().timeIntervalSince(start) < 10)
     }
 }
