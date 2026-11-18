@@ -6,6 +6,8 @@ import Combine
 final class DiagramWebView: WKWebView {
     private var onDiagram = false
     var zoomsOnPinch = false
+    /// Receives pinch magnification and the cursor in view points instead of the default handling.
+    var onPinch: ((CGFloat, CGPoint) -> Void)?
     private var finds: AnyCancellable?
 
     func listen(to requests: PassthroughSubject<FindRequest, Never>) {
@@ -19,6 +21,7 @@ final class DiagramWebView: WKWebView {
     }
 
     override func magnify(with event: NSEvent) {
+        if let onPinch { return onPinch(event.magnification, convert(event.locationInWindow, from: nil)) }
         guard zoomsOnPinch else { return super.magnify(with: event) }
         pageZoom = min(max(pageZoom * (1 + event.magnification), 0.2), 4)
     }
