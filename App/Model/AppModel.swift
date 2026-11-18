@@ -70,8 +70,7 @@ enum ViewMode: String { case view, edit, editPreview }
     static weak var active: AppModel?
 
     private var jarURL: URL {
-        Bundle.main.url(forResource: "plantuml", withExtension: "jar")
-            ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Resources/plantuml.jar")
+        AppResources.url("plantuml.jar")
     }
 
     private static var restoredOnce = false

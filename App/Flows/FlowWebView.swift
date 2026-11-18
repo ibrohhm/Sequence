@@ -17,9 +17,8 @@ struct FlowWebView: NSViewRepresentable {
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.setValue(false, forKey: "drawsBackground")
         context.coordinator.view = view
-        let folder = Bundle.main.resourceURL
-            ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Resources")
-        view.loadFileURL(folder.appendingPathComponent("flow.html"), allowingReadAccessTo: folder)
+        let page = AppResources.url("flow.html")
+        view.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
         return view
     }
 
