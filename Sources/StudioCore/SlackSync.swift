@@ -44,23 +44,36 @@ public struct SlackSync {
         process.standardOutput = stdout
         process.standardError = stderr
         let timeout = self.timeout
-        let output: (status: Int32, out: String, err: String, timedOut: Bool) = try await Task.detached {
-            signal(SIGPIPE, SIG_IGN)
-            try process.run()
-            let timedOut = Flag()
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
-                if process.isRunning { timedOut.set(); process.terminate() }
-            }
+        let output: (status: Int32, out: String, err: String, timedOut: Bool) = try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global().async {
-                try? stdin.fileHandleForWriting.write(contentsOf: Data(prompt.utf8))
-                try? stdin.fileHandleForWriting.close()
+                signal(SIGPIPE, SIG_IGN)
+                let finished = DispatchSemaphore(value: 0)
+                process.terminationHandler = { _ in finished.signal() }
+                do { try process.run() } catch {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                let timedOut = Flag()
+                DispatchQueue.global().asyncAfter(deadline: .now() + timeout) {
+                    if process.isRunning { timedOut.set(); process.terminate() }
+                }
+                DispatchQueue.global().async {
+                    try? stdin.fileHandleForWriting.write(contentsOf: Data(prompt.utf8))
+                    try? stdin.fileHandleForWriting.close()
+                }
+                var errData = Data()
+                let errDone = DispatchSemaphore(value: 0)
+                DispatchQueue.global().async {
+                    errData = stderr.fileHandleForReading.readDataToEndOfFile()
+                    errDone.signal()
+                }
+                let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+                errDone.wait()
+                finished.wait()
+                continuation.resume(returning: (process.terminationStatus, String(decoding: outData, as: UTF8.self),
+                                                String(decoding: errData, as: UTF8.self), timedOut.isSet))
             }
-            let errReader = Task.detached { stderr.fileHandleForReading.readDataToEndOfFile() }
-            let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-            let errData = await errReader.value
-            process.waitUntilExit()
-            return (process.terminationStatus, String(decoding: outData, as: UTF8.self), String(decoding: errData, as: UTF8.self), timedOut.isSet)
-        }.value
+        }
         if output.timedOut { throw SlackSyncError.timedOut }
         if output.status != 0 {
             let message = output.err.trimmingCharacters(in: .whitespacesAndNewlines)

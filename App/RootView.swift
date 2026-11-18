@@ -22,7 +22,7 @@ struct RootView: View {
                 HStack(spacing: 0) {
                     IconRail().zIndex(1)
                     HStack(spacing: 8) {
-                        if model.showSidebar && !model.inPlayground && !model.showTasks {
+                        if model.showSidebar && !model.inPlayground && !model.showTasks && !model.showFlows {
                             SidebarView().frame(width: sidebarWidth).panel(model.theme, fill: model.theme.sidebarBackground)
                                 .overlay(alignment: .trailing) { SidebarResizer(width: $sidebarWidth).offset(x: 8) }
                         }
@@ -53,7 +53,7 @@ struct RootView: View {
     }
 
     @ViewBuilder private var detail: some View {
-        if model.showTasks { SlackTasksView() } else { fileDetail }
+        if model.showTasks { SlackTasksView() } else if model.showFlows { FlowsView() } else { fileDetail }
     }
 
     private var fileDetail: some View {

@@ -169,9 +169,13 @@ struct SlackTasksView: View {
             ForEach(board.archivedTasks) { task in
                 HStack(spacing: 10) {
                     if let number = task.number { Text("#\(number)").font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(.secondary) }
-                    if board.isTasksPage { Chip(text: board.tagName(task.tag) ?? task.tag) }
+                    if board.isTasksPage {
+                        Chip(text: SlackColumns.canonical(task.status) ?? SlackColumns.all[0], colors: model.theme.statusColors(task.status))
+                        Chip(text: board.tagName(task.tag) ?? task.tag)
+                    }
                     Text(TaskCard.channelLabel(task)).font(.system(size: 12)).foregroundStyle(.secondary)
                     Text(TaskCard.title(task)).font(.system(size: 13)).lineLimit(1)
+                        .strikethrough(SlackColumns.canonical(task.status) == SlackColumns.done)
                     Spacer(minLength: 0)
                     ChromeIconButton(symbol: "arrow.up.right.square", help: "Open in Slack", size: 24, glyph: 13, tip: .aboveTrailing) {
                         if let url = URL(string: task.permalink) { NSWorkspace.shared.open(url) }
@@ -286,6 +290,7 @@ private struct Chip: View {
     let text: String
     var symbol: String?
     var attention = false
+    var colors: (fill: Color, text: Color)?
 
     var body: some View {
         HStack(spacing: 4) {
@@ -293,9 +298,9 @@ private struct Chip: View {
             Text(text)
         }
         .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(attention ? model.theme.attentionText : model.theme.chipText)
+        .foregroundStyle(colors?.text ?? (attention ? model.theme.attentionText : model.theme.chipText))
         .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(RoundedRectangle(cornerRadius: 6).fill(attention ? model.theme.attentionFill : model.theme.chipFill))
+        .background(RoundedRectangle(cornerRadius: 6).fill(colors?.fill ?? (attention ? model.theme.attentionFill : model.theme.chipFill)))
     }
 }
 
@@ -347,6 +352,7 @@ private struct TaskCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(Self.title(task)).font(.system(size: 14, weight: .medium)).lineLimit(3)
+                .strikethrough(!list && SlackColumns.canonical(task.status) == SlackColumns.done)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if !list, let next = task.nextAction, !next.isEmpty {
                 Text("→ \(next)").font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(2)
@@ -354,6 +360,8 @@ private struct TaskCard: View {
             }
             if hasChips {
                 ChipFlow {
+                    if !list { Chip(text: SlackColumns.canonical(task.status) ?? SlackColumns.all[0], colors: model.theme.statusColors(task.status)) }
+                    ForEach(task.reactions, id: \.self) { Chip(text: SlackEmoji.label(for: $0)) }
                     if let tagName { Chip(text: tagName) }
                     if task.synced == nil {
                         Chip(text: "Waiting for sync")
@@ -383,6 +391,7 @@ private struct TaskCard: View {
                 } else {
                     ChromeIconButton(symbol: "arrow.triangle.2.circlepath", help: "Sync this task", size: 24, glyph: 13, tip: .aboveTrailing, action: onSync)
                 }
+                ChromeIconButton(symbol: "archivebox", help: "Archive", size: 24, glyph: 13, tip: .aboveTrailing, action: onArchive)
                 ChromeIconButton(symbol: "arrow.up.right.square", help: "Open in Slack", size: 24, glyph: 13, tip: .aboveTrailing) {
                     if let url = URL(string: task.permalink) { NSWorkspace.shared.open(url) }
                 }
@@ -394,13 +403,17 @@ private struct TaskCard: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(hovering ? model.theme.cardBorderHover : model.theme.cardBorder))
         .shadow(color: model.theme.cardShadow, radius: 2, y: 1)
         .contentShape(Rectangle())
-        .onHover { hovering = $0 }
+        .onHover { inside in
+            guard inside != hovering else { return }
+            hovering = inside
+            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+        .onDisappear { if hovering { hovering = false; NSCursor.pop() } }
         .draggable(task.id)
-        .contextMenu { Button("Archive", action: onArchive) }
     }
 
     private var hasChips: Bool {
-        tagName != nil || task.synced == nil || (!list && task.replies != nil) || task.newReplies != nil || (!list && task.quietDays(now: Date(), doneColumn: doneColumn) != nil)
+        !list || !task.reactions.isEmpty || tagName != nil || task.synced == nil || (!list && task.replies != nil) || task.newReplies != nil || (!list && task.quietDays(now: Date(), doneColumn: doneColumn) != nil)
     }
 }
 

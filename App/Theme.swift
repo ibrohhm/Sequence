@@ -1,4 +1,5 @@
 import SwiftUI
+import StudioCore
 import AppKit
 
 /// The two app themes. Dark follows VS Code's "Dark Modern" palette.
@@ -34,6 +35,19 @@ enum Theme: String {
     var chipText: Color { self == .dark ? Color(nsColor: NSColor(hex: 0xC8C8C8)) : Color(nsColor: NSColor(hex: 0x4B4B50)) }
     var attentionFill: Color { Color(nsColor: NSColor(hex: 0xDB6510)).opacity(self == .dark ? 0.20 : 0.12) }
     var attentionText: Color { self == .dark ? Color(nsColor: NSColor(hex: 0xF4A868)) : Color(nsColor: NSColor(hex: 0xA64B0A)) }
+    /// Jira-style status lozenge colours: Todo neutral, In progress blue, Blocked red, Done green (other statuses count as Todo).
+    func statusColors(_ status: String) -> (fill: Color, text: Color) {
+        let dark = self == .dark
+        func pair(_ fill: UInt32, _ text: UInt32, _ light: UInt32, _ lightText: UInt32) -> (fill: Color, text: Color) {
+            (Color(nsColor: NSColor(hex: dark ? fill : light)).opacity(dark ? 0.22 : 0.14), Color(nsColor: NSColor(hex: dark ? text : lightText)))
+        }
+        switch SlackColumns.canonical(status) {
+        case "In progress": return pair(0x4C9AFF, 0x85B8FF, 0x0052CC, 0x0747A6)
+        case "Blocked": return pair(0xF87462, 0xFF9C8F, 0xDE350B, 0xA32100)
+        case "Done": return pair(0x57D9A3, 0x79F2C0, 0x36B37E, 0x006644)
+        default: return (chipFill, chipText)
+        }
+    }
     var tabTrack: Color { self == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05) }
 
     static let cssVariables = """

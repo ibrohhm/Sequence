@@ -8,7 +8,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { makeVault, vaultsFile } from "./helpers.ts";
 
-const NAMES = ["create_project", "create_topic", "edit_topic", "find_topic", "get_slack_task", "list_projects", "list_slack_tags", "list_vaults", "overwrite_topic", "read_topic", "search_content", "upsert_slack_task"];
+const NAMES = ["create_project", "create_topic", "delete_flow", "edit_topic", "find_topic", "get_flow", "get_slack_task", "list_flows", "list_projects", "list_slack_tags", "list_vaults", "overwrite_topic", "read_topic", "search_content", "upsert_flow", "upsert_slack_task"];
 
 async function connect(vaultsPath: string, slackDb?: string): Promise<Client> {
   const client = new Client({ name: "test", version: "0" });
@@ -22,7 +22,7 @@ async function connect(vaultsPath: string, slackDb?: string): Promise<Client> {
 
 const text = (r: unknown) => ((r as { content: { text: string }[] }).content[0].text);
 
-test("server lists exactly the twelve tools", async () => {
+test("server lists exactly the sixteen tools", async () => {
   const v = await makeVault({}, { git: true });
   const client = await connect(await vaultsFile([v]));
   try {

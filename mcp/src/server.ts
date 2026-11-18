@@ -6,6 +6,7 @@ import { loadVaults, pickVault, type Vault } from "./vaults.ts";
 import { openDb } from "./slackdb.ts";
 import { getSlackTask, upsertSlackTask } from "./slacktasks.ts";
 import { listSlackTags } from "./slacktags.ts";
+import { deleteFlow, getFlow, listFlows, upsertFlow } from "./flows.ts";
 
 type Shape = Record<string, z.ZodType>;
 
@@ -53,6 +54,7 @@ export function buildServer(): McpServer {
       last_reply: z.string().describe("Slack ts or ISO time of the last message in the thread"),
       summary: z.string().max(300).optional().describe("Where the thread stands now, about 140 characters; send only when summary_stale was true"),
       next_action: z.string().max(200).optional().describe("What the user should do or wait for, about 100 characters; needs summary"),
+      reactions: z.array(z.string()).optional().describe("Emoji names (no colons) of the tag reactions the user put on this thread, such as [\"ticket\"]; omit to keep what is stored"),
     },
     async (_vaults, a) => {
       const db = openDb();
@@ -90,6 +92,76 @@ export function buildServer(): McpServer {
         const task = getSlackTask(db, a.number);
         if (!task) throw new Error(`No task #${a.number}`);
         return task;
+      } finally {
+        db.close();
+      }
+    },
+    false,
+  );
+
+  const node = z.looseObject({ id: z.string() });
+  const edge = z.looseObject({ source: z.string(), target: z.string() });
+
+  tool(
+    "list_flows",
+    "List the flows shown on the Flows page of Sequence (id and name), in page order.",
+    {},
+    async () => {
+      const db = openDb();
+      try {
+        return listFlows(db);
+      } finally {
+        db.close();
+      }
+    },
+    false,
+  );
+
+  tool(
+    "get_flow",
+    "Get one flow with its React Flow graph (nodes and edges), by id from list_flows or by name.",
+    { id: z.number().int().optional(), name: z.string().optional() },
+    async (_vaults, a) => {
+      const db = openDb();
+      try {
+        const flow = getFlow(db, a);
+        if (!flow) throw new Error("No such flow");
+        return flow;
+      } finally {
+        db.close();
+      }
+    },
+    false,
+  );
+
+  tool(
+    "upsert_flow",
+    "Create or replace a flow shown on the Flows page of Sequence. Nodes: {id, type?, data: {label, detail?, status?, tech?, method?}, position?: {x, y}}; a node without position keeps the one the user dragged it to, else goes on a grid. Node types: input (start), output (end), default (step), decision (diamond, branch with edge labels), service (microservice; data.tech like Go), database (cylinder), queue (topic or queue, monospace), api (endpoint; data.method GET/POST, label is the path), actor (person or system that starts the flow), external (third party, dashed), note (free text, no connections), group (dashed container; give style {width, height}, and set parentId on children, listed after it, with positions relative to the group). data.status is Todo, In progress, Blocked or Done and shows as a coloured chip. data.color (blue, green, amber, red, purple, gray) tints a node or a connector; connector data may also set dashed: true and arrow: false. Edges: {source, target, label?, type?: default|straight|step|smoothstep|simplebezier, animated?: true for async, sourceHandle?: \"r\", targetHandle?: \"l\"}; the default handles are bottom to top, use r and l for left to right layouts. Replaces the whole graph.",
+    {
+      name: z.string().describe("Flow name; the same name updates that flow"),
+      nodes: z.array(node),
+      edges: z.array(edge),
+    },
+    async (_vaults, a) => {
+      const db = openDb();
+      try {
+        return upsertFlow(db, a);
+      } finally {
+        db.close();
+      }
+    },
+    false,
+  );
+
+  tool(
+    "delete_flow",
+    "Permanently delete one flow from the Flows page of Sequence, by id from list_flows or by name. It cannot be undone and the graph is lost; ask the user to confirm the flow name first.",
+    { id: z.number().int().optional(), name: z.string().optional() },
+    async (_vaults, a) => {
+      if (a.id === undefined && !a.name) throw new Error("Pass an id or a name");
+      const db = openDb();
+      try {
+        return deleteFlow(db, a);
       } finally {
         db.close();
       }

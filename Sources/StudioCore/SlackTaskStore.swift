@@ -40,6 +40,7 @@ public final class SlackTaskStore {
       status TEXT NOT NULL DEFAULT '',
       archived INTEGER NOT NULL DEFAULT 0,
       number INTEGER,
+      reactions TEXT,
       PRIMARY KEY (tag, channel_id, thread_ts)
     )
     """
@@ -100,7 +101,7 @@ public final class SlackTaskStore {
 
     private func upgrade() throws {
         let version = try rows("PRAGMA user_version", []) { Int(sqlite3_column_int64($0, 0)) }.first ?? 0
-        guard version < 5 else { return }
+        guard version < 6 else { return }
         try exec("BEGIN IMMEDIATE")
         do {
             let have = Set(try rows("PRAGMA table_info(tasks)", []) { String(cString: sqlite3_column_text($0, 1)) })
@@ -128,6 +129,9 @@ public final class SlackTaskStore {
                 ('saved', 'Saved', 'list', 'saved', '[]', '[]', 1, 1)
                 """)
             }
+            if !(try rows("PRAGMA table_info(tasks)", []) { String(cString: sqlite3_column_text($0, 1)) }).contains("reactions") {
+                try exec("ALTER TABLE tasks ADD COLUMN reactions TEXT")
+            }
             try assignMissingNumbers()
             try exec(Self.numberIndexDDL)
             let standard = Self.encodeList(SlackColumns.all)
@@ -140,7 +144,7 @@ public final class SlackTaskStore {
                     if next != status { try run("UPDATE tasks SET status = ? WHERE rowid = ?", [.text(next), .int(rowid)]) }
                 }
             }
-            try exec("PRAGMA user_version = 5")
+            try exec("PRAGMA user_version = 6")
             try exec("COMMIT")
         } catch {
             try? exec("ROLLBACK")
@@ -211,7 +215,7 @@ public final class SlackTaskStore {
     public func tasks(tag: String, includeArchived: Bool) throws -> [SlackTask] {
         let sql = """
         SELECT tag, channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced, status, archived,
-               summary, next_action, summary_replies, number
+               summary, next_action, summary_replies, number, reactions
         FROM tasks WHERE tag = ?\(includeArchived ? "" : " AND archived = 0")
         """
         let formatter = ISO8601DateFormatter()
@@ -226,7 +230,7 @@ public final class SlackTaskStore {
                 tag: text(0) ?? "", channelID: text(1) ?? "", threadTS: text(2) ?? "", permalink: text(3) ?? "", channelName: text(4), snippet: text(5),
                 replies: int(6), repliesAtTag: int(7), lastReply: text(8).flatMap { formatter.date(from: $0) },
                 tagged: text(9) ?? "", synced: text(10), status: text(11) ?? "", archived: (int(12) ?? 0) != 0,
-                summary: text(13), nextAction: text(14), summaryReplies: int(15), number: int(16)
+                summary: text(13), nextAction: text(14), summaryReplies: int(15), number: int(16), reactions: text(17).map(Self.decodeList) ?? []
             )
         }
     }

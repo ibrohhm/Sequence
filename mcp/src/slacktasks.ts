@@ -14,6 +14,7 @@ export type UpsertInput = {
   last_reply: string;
   summary?: string;
   next_action?: string;
+  reactions?: string[];
 };
 
 export type UpsertResult = { action: "created" | "updated" | "archived"; channel_id: string; thread_ts: string; summary_stale: boolean; number: number | null };
@@ -52,6 +53,9 @@ function validate(input: UpsertInput): URL {
       throw new Error("next_action must be a non-empty string of at most 200 characters");
     }
   }
+  if (input.reactions !== undefined && (!Array.isArray(input.reactions) || input.reactions.some((r) => typeof r !== "string" || !/^[a-z0-9_+-]+$/i.test(r)))) {
+    throw new Error("reactions must be a list of emoji names without colons, such as [\"ticket\"]");
+  }
   try {
     return new URL(input.permalink);
   } catch {
@@ -62,6 +66,7 @@ function validate(input: UpsertInput): URL {
 export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date = new Date()): UpsertResult {
   const link = validate(input);
   const lastReply = lastReplyIso(input.last_reply);
+  const reactions = input.reactions === undefined ? null : JSON.stringify(input.reactions);
   const threadTs = input.thread_ts !== undefined ? input.thread_ts : (link.searchParams.get("thread_ts") ?? input.message_ts);
   if (!SLACK_TS.test(threadTs)) throw new Error(`thread_ts must look like 1794536057.965929: ${threadTs}`);
   const root = `${link.origin}/archives/${input.channel_id}/p${threadTs.replace(".", "")}`;
@@ -104,20 +109,20 @@ export function upsertSlackTask(db: DatabaseSync, input: UpsertInput, now: Date 
     if (row) {
       const withSummary = input.summary !== undefined;
       db.prepare(`UPDATE tasks SET permalink = ?, channel_name = ?, snippet = ?, replies = ?, last_reply = ?, synced = ?,
-                  replies_at_tag = COALESCE(replies_at_tag, ?), number = COALESCE(number, ?)${withSummary ? ", summary = ?, next_action = ?, summary_replies = ?" : ""}
+                  replies_at_tag = COALESCE(replies_at_tag, ?), number = COALESCE(number, ?), reactions = COALESCE(?, reactions)${withSummary ? ", summary = ?, next_action = ?, summary_replies = ?" : ""}
                   WHERE tag = ? AND channel_id = ? AND thread_ts = ?`)
-        .run(root, input.channel_name, input.snippet, replies, lastReply, synced, replies, nextNumber(),
+        .run(root, input.channel_name, input.snippet, replies, lastReply, synced, replies, nextNumber(), reactions,
           ...(withSummary ? [input.summary!, input.next_action ?? null, replies] : []), tagId, channel, threadTs);
       const isStale = stale(threadTs);
       db.exec("COMMIT");
       return result("updated", threadTs, isStale);
     }
     db.prepare(`INSERT INTO tasks (tag, channel_id, thread_ts, permalink, channel_name, snippet, replies, replies_at_tag, last_reply, tagged, synced,
-                                   summary, next_action, summary_replies, status, number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                                   summary, next_action, summary_replies, status, number, reactions)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(tagId, channel, threadTs, root, input.channel_name, input.snippet, replies, replies, lastReply, iso(now).slice(0, 10), synced,
         input.summary ?? null, input.summary !== undefined ? (input.next_action ?? null) : null, input.summary !== undefined ? replies : null,
-        isList ? "" : STANDARD_COLUMNS[0], nextNumber());
+        isList ? "" : STANDARD_COLUMNS[0], nextNumber(), reactions);
     const isStale = stale(threadTs);
     db.exec("COMMIT");
     return result("created", threadTs, isStale);
@@ -145,11 +150,12 @@ export type SlackTaskRow = {
   last_reply: string | null;
   tagged: string;
   synced: string | null;
+  reactions: string[];
 };
 
 export function getSlackTask(db: DatabaseSync, number: number): SlackTaskRow | undefined {
   const row = db.prepare(`SELECT t.number, t.tag, tags.name AS tag_name, t.status, t.archived, t.channel_id, t.channel_name, t.thread_ts, t.permalink,
-                                 t.snippet, t.summary, t.next_action, t.replies, t.replies_at_tag, t.last_reply, t.tagged, t.synced
-                          FROM tasks t LEFT JOIN tags ON tags.id = t.tag WHERE t.number = ?`).get(number) as (Omit<SlackTaskRow, "archived"> & { archived: number }) | undefined;
-  return row && { ...row, archived: row.archived !== 0 };
+                                 t.snippet, t.summary, t.next_action, t.replies, t.replies_at_tag, t.last_reply, t.tagged, t.synced, t.reactions
+                          FROM tasks t LEFT JOIN tags ON tags.id = t.tag WHERE t.number = ?`).get(number) as (Omit<SlackTaskRow, "archived" | "reactions"> & { archived: number; reactions: string | null }) | undefined;
+  return row && { ...row, archived: row.archived !== 0, reactions: row.reactions ? (JSON.parse(row.reactions) as string[]) : [] };
 }

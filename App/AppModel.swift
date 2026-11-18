@@ -28,6 +28,7 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var mode: ViewMode = .view
     @Published var showSidebar = true
     @Published var showTasks = false
+    @Published var showFlows = false
     @Published var query = ""
     @Published var searching = false
     @Published var sidebarFocus: URL?
@@ -282,6 +283,7 @@ enum ViewMode: String { case view, edit, editPreview }
     func select(_ url: URL?) {
         guard let url, LibraryScanner.extensions.contains(url.pathExtension.lowercased()) else { return }
         showTasks = false
+        showFlows = false
         if inPlayground, session?.isDirty == true { save() }
         if let current = session, current.isDirty, current.url != url {
             pendingSelection = url
@@ -422,6 +424,7 @@ enum ViewMode: String { case view, edit, editPreview }
         guard let rootFolder else { notice = "Add a vault first."; return }
         closePlayground()
         showTasks = false
+        showFlows = false
         showSidebar = true
         searching = false
         query = ""
@@ -442,6 +445,7 @@ enum ViewMode: String { case view, edit, editPreview }
     func toggleSearch() {
         closePlayground()
         showTasks = false
+        showFlows = false
         showSidebar = true
         searching.toggle()
         query = ""
@@ -467,6 +471,7 @@ enum ViewMode: String { case view, edit, editPreview }
     /// Opens the scratch editor for `kind` (the last one used by default). Its text is kept between launches.
     func openPlayground(kind: DocumentKind? = nil) {
         showTasks = false
+        showFlows = false
         guard let url = try? Playground.ensureFile(for: kind ?? playgroundKind, in: playgroundDirectory) else {
             notice = "Could not open the playground."
             return
@@ -477,7 +482,15 @@ enum ViewMode: String { case view, edit, editPreview }
     /// Shows the Slack tasks board in place of the file detail.
     func openTasks() {
         if inPlayground { closePlayground() }
+        showFlows = false
         showTasks = true
+    }
+
+    /// Shows the Flows page in place of the file detail.
+    func openFlows() {
+        if inPlayground { closePlayground() }
+        showTasks = false
+        showFlows = true
     }
 
     /// Leaves the playground and returns to the file list with nothing open.

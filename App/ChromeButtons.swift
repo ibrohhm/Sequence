@@ -101,9 +101,9 @@ struct IconRail: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            ChromeIconButton(symbol: "folder", help: "Files (⌘⌃S)", selected: !model.inPlayground && !model.showTasks && model.showSidebar, tip: .right) { showFiles() }
+            ChromeIconButton(symbol: "folder", help: "Files (⌘⌃S)", selected: !model.inPlayground && !model.showTasks && !model.showFlows && model.showSidebar, tip: .right) { showFiles() }
                 .keyboardShortcut("s", modifiers: [.command, .control])
-            ChromeIconButton(symbol: "magnifyingglass", help: "Search files", selected: model.searching && model.showSidebar && !model.inPlayground && !model.showTasks, tip: .right) {
+            ChromeIconButton(symbol: "magnifyingglass", help: "Search files", selected: model.searching && model.showSidebar && !model.inPlayground && !model.showTasks && !model.showFlows, tip: .right) {
                 model.toggleSearch()
             }
             ChromeIconButton(symbol: "flowchart", help: "PlantUML playground (⌘⇧P)", selected: model.inPlayground && model.playgroundKind == .diagram, tip: .right) {
@@ -114,6 +114,9 @@ struct IconRail: View {
             }
             ChromeIconButton(symbol: "checklist", help: "Slack tasks", selected: model.showTasks, tip: .right) {
                 model.openTasks()
+            }
+            ChromeIconButton(symbol: "point.3.connected.trianglepath.dotted", help: "Flows", selected: model.showFlows, tip: .right) {
+                model.openFlows()
             }
             Spacer()
             ChromeIconButton(
@@ -129,8 +132,9 @@ struct IconRail: View {
     }
 
     private func showFiles() {
-        if model.showTasks {
+        if model.showTasks || model.showFlows {
             model.showTasks = false
+            model.showFlows = false
             model.showSidebar = true
         } else if model.inPlayground {
             model.closePlayground()

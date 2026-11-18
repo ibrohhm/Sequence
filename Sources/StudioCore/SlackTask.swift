@@ -19,10 +19,12 @@ public struct SlackTask: Identifiable, Equatable, Sendable {
     public var nextAction: String?
     public var summaryReplies: Int?
     public var number: Int?
+    /// Emoji names (no colons) of the tag reactions the user put on the thread, as the sync recorded them.
+    public var reactions: [String]
 
     public init(tag: String, channelID: String, threadTS: String, permalink: String, channelName: String?, snippet: String?, replies: Int?,
                 repliesAtTag: Int?, lastReply: Date?, tagged: String, synced: String?, status: String, archived: Bool,
-                summary: String? = nil, nextAction: String? = nil, summaryReplies: Int? = nil, number: Int? = nil) {
+                summary: String? = nil, nextAction: String? = nil, summaryReplies: Int? = nil, number: Int? = nil, reactions: [String] = []) {
         self.tag = tag
         self.channelID = channelID
         self.threadTS = threadTS
@@ -40,6 +42,7 @@ public struct SlackTask: Identifiable, Equatable, Sendable {
         self.nextAction = nextAction
         self.summaryReplies = summaryReplies
         self.number = number
+        self.reactions = reactions
     }
 
     public var id: String { "\(tag)/\(channelID)/\(threadTS)" }

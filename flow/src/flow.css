@@ -1,0 +1,157 @@
+html, body, #root { margin: 0; height: 100%; background: transparent; }
+body { font: 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+.react-flow { --xy-background-color: transparent; --xy-background-color-default: transparent; }
+.editor.light { --side-border: rgba(0, 0, 0, 0.12); --side-text: #1d1d1f; --side-card: #fff; --side-accent: #0747a6; --card-bg: #fff; --card-border: rgba(0, 0, 0, 0.16); --card-text: #1d1d1f; --card-border-strong: rgba(0, 0, 0, 0.32); --muted: #5f6368; --note-bg: rgba(0, 0, 0, 0.05); --dot: rgba(0, 0, 0, 0.14); --edge: rgba(0, 0, 0, 0.45);
+  --todo-bg: rgba(0, 0, 0, 0.07); --todo-fg: #555; --progress-bg: rgba(0, 82, 204, 0.14); --progress-fg: #0747a6;
+  --blocked-bg: rgba(222, 53, 11, 0.14); --blocked-fg: #a32100; --done-bg: rgba(54, 179, 126, 0.16); --done-fg: #006644; }
+.editor.dark { --side-border: rgba(255, 255, 255, 0.14); --side-text: #ececee; --side-card: #2b2d33; --side-accent: #85b8ff; --card-bg: #2b2d33; --card-border: rgba(255, 255, 255, 0.16); --card-text: #ececee; --card-border-strong: rgba(255, 255, 255, 0.34); --muted: #a2a2a8; --note-bg: rgba(255, 255, 255, 0.07); --dot: rgba(255, 255, 255, 0.16); --edge: rgba(255, 255, 255, 0.5);
+  --todo-bg: rgba(255, 255, 255, 0.1); --todo-fg: #b8b8bd; --progress-bg: rgba(76, 154, 255, 0.22); --progress-fg: #85b8ff;
+  --blocked-bg: rgba(248, 116, 98, 0.22); --blocked-fg: #ff9c8f; --done-bg: rgba(87, 217, 163, 0.22); --done-fg: #79f2c0; }
+.react-flow__background pattern circle { fill: var(--dot); }
+.react-flow__edge-path { stroke: var(--edge); stroke-width: 1.5; }
+.react-flow__arrowhead polyline { stroke: var(--edge); fill: var(--edge); }
+.react-flow__edge-text { fill: var(--card-text); font-size: 11px; }
+.react-flow__edge-textbg { fill: var(--card-bg); }
+.react-flow__controls { box-shadow: none; border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; }
+.react-flow__controls-button { background: var(--card-bg); color: var(--card-text); border-bottom: 1px solid var(--card-border); fill: var(--card-text); }
+.react-flow__node { cursor: grab; }
+.react-flow__node:active { cursor: grabbing; }
+.card { width: max-content; max-width: 260px; padding: 7px 11px; border-radius: 8px; background: var(--card-bg); color: var(--card-text);
+  border: 1px solid var(--card-border); box-sizing: border-box; }
+.card.row { display: flex; gap: 9px; align-items: center; }
+.card.terminal { border-radius: 999px; padding: 6px 16px; text-align: center; }
+.card.external { border-style: dashed; }
+.icon { width: 16px; height: 16px; flex: none; color: var(--muted); }
+.text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.label { line-height: 1.35; overflow-wrap: anywhere; font-weight: 500; }
+.label.mono, .method { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 400; }
+.detail { color: var(--muted); font-size: 11.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip { font-size: 11px; line-height: 1; padding: 3px 7px; border-radius: 999px; }
+.chip-todo { background: var(--todo-bg); color: var(--todo-fg); }
+.chip-progress { background: var(--progress-bg); color: var(--progress-fg); }
+.chip-blocked { background: var(--blocked-bg); color: var(--blocked-fg); }
+.chip-done { background: var(--done-bg); color: var(--done-fg); }
+.method { flex: none; padding: 3px 6px; border-radius: 5px; background: var(--todo-bg); color: var(--todo-fg); font-weight: 600; font-size: 11px; }
+.decision { position: relative; width: max-content; max-width: 260px; padding: 20px 34px; box-sizing: border-box; text-align: center; color: var(--card-text); }
+.decision .text { position: relative; z-index: 1; align-items: center; }
+.decision::before, .decision::after { content: ""; position: absolute; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.decision::before { inset: 0; background: var(--card-border-strong); }
+.decision::after { inset: 1.5px; background: var(--card-bg); }
+.database { position: relative; width: max-content; max-width: 240px; padding: 20px 12px 8px; box-sizing: border-box; background: var(--card-bg); color: var(--card-text);
+  border: 1px solid var(--card-border); border-radius: 12px / 9px; text-align: center; }
+.database::before { content: ""; position: absolute; top: 0; left: -1px; right: -1px; height: 18px; border: 1px solid var(--card-border); border-radius: 50%; background: var(--card-bg); box-sizing: border-box; }
+.database .text { position: relative; align-items: center; }
+.actor { display: flex; flex-direction: column; align-items: center; gap: 6px; width: max-content; max-width: 160px; text-align: center; color: var(--card-text); }
+.avatar { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--card-bg); border: 1px solid var(--card-border); }
+.avatar .icon { width: 20px; height: 20px; }
+.actor .text { align-items: center; }
+.note { width: max-content; max-width: 240px; padding: 7px 10px; border-radius: 6px; background: var(--note-bg); color: var(--card-text); font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.group { width: 100%; height: 100%; box-sizing: border-box; border: 1px dashed var(--card-border-strong); border-radius: 12px; background: var(--note-bg); padding: 8px 12px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.react-flow__node-group { background: transparent; border: none; padding: 0; }
+.react-flow .react-flow__node:is(.react-flow__node-default, .react-flow__node-input, .react-flow__node-output, .react-flow__node-decision, .react-flow__node-service, .react-flow__node-database, .react-flow__node-queue, .react-flow__node-api, .react-flow__node-actor, .react-flow__node-external, .react-flow__node-note, .react-flow__node-group),
+.react-flow .react-flow__node:is(.react-flow__node-default, .react-flow__node-input, .react-flow__node-output, .react-flow__node-group):is(:hover, :focus, :focus-visible, .selected) {
+  width: auto; padding: 0; border: none; border-radius: 0; background: transparent; box-shadow: none; text-align: left; font-size: inherit; color: inherit; outline: none; }
+.react-flow__handle { width: 8px; height: 8px; background: var(--edge); border: 1px solid var(--card-bg); min-width: 0; min-height: 0; opacity: 0; transition: opacity 0.12s ease-out; }
+.react-flow__node:hover .react-flow__handle, .react-flow__node.selected .react-flow__handle,
+.react-flow__handle.connectingfrom, .react-flow__handle.connectingto, .react-flow__handle.valid { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .react-flow__handle { transition: none; } }
+.editor { position: relative; height: 100%; overflow: hidden; }
+.canvas { position: absolute; inset: 0; }
+.float { position: absolute; z-index: 5; box-sizing: border-box; background: var(--side-card); color: var(--side-text); border: 1px solid var(--side-border);
+  border-radius: 10px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14); }
+.palette-panel { left: 12px; top: 60px; width: 188px; max-height: calc(100% - 132px); overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 8px; }
+.palette-head { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 4px 6px; font: inherit; font-weight: 600; color: inherit; background: none; border: none; cursor: pointer; }
+.caret { font-size: 10px; opacity: 0.6; }
+.palette-group { display: flex; flex-direction: column; gap: 2px; }
+.palette-title { padding: 0 6px; font-size: 11px; color: var(--muted); }
+.palette { display: flex; flex-direction: column; gap: 2px; }
+.palette-item { display: flex; align-items: center; gap: 9px; padding: 5px 6px; border-radius: 6px; border: 1px solid transparent; cursor: grab; user-select: none; -webkit-user-select: none; }
+.palette-item:hover { background: var(--note-bg); border-color: var(--side-border); }
+.palette-item:active { cursor: grabbing; }
+.palette-name { flex: 1; }
+.hint { margin: 0; padding: 0 6px 4px; font-size: 11px; line-height: 1.4; color: var(--muted); }
+.swatch { flex: none; width: 22px; height: 14px; box-sizing: border-box; border: 1.5px solid var(--card-border-strong); background: var(--card-bg); }
+.swatch-box { border-radius: 3px; }
+.swatch-pill { border-radius: 999px; }
+.swatch-circle { width: 16px; height: 16px; margin: 0 3px; border-radius: 50%; }
+.swatch-dashed { border-style: dashed; border-radius: 3px; }
+.swatch-note { border: none; border-radius: 3px; background: var(--note-bg); }
+.swatch-cylinder { border-radius: 40% / 30%; }
+.swatch-diamond { border: none; width: 16px; height: 16px; margin: 0 3px; background: var(--card-border-strong); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.inspector { right: 12px; top: 12px; width: 208px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.inspector h3 { margin: 0 0 2px; font-size: 12px; font-weight: 600; }
+.inspector input, .inspector select, .inspector button { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--side-border); background: var(--side-card); color: var(--side-text); }
+.inspector button { cursor: pointer; color: var(--blocked-fg); }
+.inspector input:focus-visible, .inspector select:focus-visible, .inspector button:focus-visible, .palette-head:focus-visible { outline: 2px solid var(--side-accent); outline-offset: 1px; }
+
+
+/* One selection ring for every shape: the shape's own border turns accent, nothing is added around it. */
+.card, .database, .database::before, .avatar, .group { transition: border-color 0.12s ease-out, box-shadow 0.12s ease-out; }
+.decision::before { transition: background-color 0.12s ease-out; }
+.selected .card { border-color: var(--side-accent); box-shadow: 0 0 0 1px var(--side-accent); }
+.selected .database, .selected .database::before { border-color: var(--side-accent); }
+.selected .database { box-shadow: 0 0 0 1px var(--side-accent); }
+.selected .decision::before { background: var(--side-accent); }
+.selected .avatar { border-color: var(--side-accent); box-shadow: 0 0 0 1px var(--side-accent); }
+.selected .note { box-shadow: 0 0 0 1.5px var(--side-accent); }
+.selected .group { border-color: var(--side-accent); border-style: solid; }
+.note { transition: box-shadow 0.12s ease-out; }
+
+/* Editing in place: same box, same text; only a soft halo and a caret show it is live. */
+.editable { cursor: text; }
+.editable.editing { outline: none; white-space: pre-wrap; min-width: 2ch; border-radius: 3px; caret-color: var(--side-accent); -webkit-user-select: text; user-select: text; }
+.label { white-space: pre-wrap; }
+.palette-item { transition: background-color 0.12s ease-out, border-color 0.12s ease-out; }
+@media (prefers-reduced-motion: reduce) { .card, .database, .database::before, .avatar, .group, .note, .decision::before, .palette-item { transition: none; } }
+
+/* While a label is being typed in, the node shows no focus ring at all. */
+.selected:has(.editing) .card { border-color: var(--card-border); box-shadow: none; }
+.selected:has(.editing) .database, .selected:has(.editing) .database::before { border-color: var(--card-border); box-shadow: none; }
+.selected:has(.editing) .decision::before { background: var(--card-border-strong); }
+.selected:has(.editing) .avatar { border-color: var(--card-border); box-shadow: none; }
+.selected:has(.editing) .note { box-shadow: none; }
+.selected:has(.editing) .group { border-color: var(--card-border-strong); border-style: dashed; }
+
+/* Connector labels: a small chip on the line; an empty selected connector offers "Add text". */
+.edge-label { position: absolute; pointer-events: all; font-size: 11px; line-height: 1.3; }
+.edge-text { padding: 1px 6px; border-radius: 4px; background: var(--card-bg); color: var(--card-text); white-space: pre-wrap; cursor: text; min-width: 2ch; }
+.edge-text.ghost { color: var(--muted); cursor: pointer; }
+.edge-text.editing { outline: none; caret-color: var(--side-accent); -webkit-user-select: text; user-select: text; }
+.react-flow__edge.selected .react-flow__edge-path { stroke: var(--side-accent); }
+
+/* A selected connector is raised above the label layer; keep labels on top of every line. */
+.react-flow__edgelabel-renderer { z-index: 1001; }
+.edge-text { padding: 2px 7px; }
+
+/* Colours: each name tints a node through the variables the shapes already use. */
+.editor.light { --c-blue-bg: #e8f0fc; --c-blue-line: #86a8e6; --c-green-bg: #e4f5ec; --c-green-line: #6cc49c; --c-amber-bg: #fbf1d9; --c-amber-line: #d9a62e; --c-red-bg: #fbe7e2; --c-red-line: #e57a62; --c-purple-bg: #eee8f9; --c-purple-line: #a88bde; --c-gray-bg: #eeeff1; --c-gray-line: #a0a5ad; }
+.editor.dark { --c-blue-bg: #1f2b44; --c-blue-line: #4c7fd6; --c-green-bg: #17332a; --c-green-line: #2e9f72; --c-amber-bg: #3a2f12; --c-amber-line: #c99100; --c-red-bg: #3d1f1a; --c-red-line: #d4553a; --c-purple-bg: #2b2340; --c-purple-line: #8a63d2; --c-gray-bg: #2f3136; --c-gray-line: #7a7f87; }
+[data-color="blue"] { --card-bg: var(--c-blue-bg); --card-border: var(--c-blue-line); --card-border-strong: var(--c-blue-line); --note-bg: var(--c-blue-bg); }
+[data-color="green"] { --card-bg: var(--c-green-bg); --card-border: var(--c-green-line); --card-border-strong: var(--c-green-line); --note-bg: var(--c-green-bg); }
+[data-color="amber"] { --card-bg: var(--c-amber-bg); --card-border: var(--c-amber-line); --card-border-strong: var(--c-amber-line); --note-bg: var(--c-amber-bg); }
+[data-color="red"] { --card-bg: var(--c-red-bg); --card-border: var(--c-red-line); --card-border-strong: var(--c-red-line); --note-bg: var(--c-red-bg); }
+[data-color="purple"] { --card-bg: var(--c-purple-bg); --card-border: var(--c-purple-line); --card-border-strong: var(--c-purple-line); --note-bg: var(--c-purple-bg); }
+[data-color="gray"] { --card-bg: var(--c-gray-bg); --card-border: var(--c-gray-line); --card-border-strong: var(--c-gray-line); --note-bg: var(--c-gray-bg); }
+
+/* Inspector controls added for colour and connector style. */
+.dots { display: flex; gap: 6px; padding: 2px 0; }
+.dot { width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1px solid var(--side-border); cursor: pointer; box-sizing: border-box; transition: box-shadow 0.12s ease-out; }
+.dot.none { background: var(--side-card); background-image: linear-gradient(135deg, transparent 46%, var(--muted) 46%, var(--muted) 54%, transparent 54%); }
+.dot.on { box-shadow: 0 0 0 2px var(--side-card), 0 0 0 4px var(--side-accent); }
+.dot:focus-visible { outline: 2px solid var(--side-accent); outline-offset: 2px; }
+.check { display: flex; align-items: center; gap: 7px; font-size: 12px; cursor: pointer; }
+.inspector button.plain { color: var(--side-text); }
+
+/* A resized node fills the size it was given. */
+.react-flow__node.sized > .card, .react-flow__node.sized > .database, .react-flow__node.sized > .decision, .react-flow__node.sized > .note {
+  width: 100%; height: 100%; max-width: none; box-sizing: border-box; }
+.react-flow__node.sized > .card, .react-flow__node.sized > .database { display: flex; flex-direction: column; justify-content: center; }
+.react-flow__node.sized > .card.row { flex-direction: row; }
+.react-flow__node.sized > .decision { display: flex; align-items: center; justify-content: center; }
+.react-flow__resize-control.handle { width: 9px; height: 9px; border-radius: 2px; background: var(--side-card); border: 1.5px solid var(--side-accent); }
+.react-flow__resize-control.line { border-color: var(--side-accent); border-width: 1px; }
+
+.react-flow__controls-button svg.hist { fill: none; max-width: 14px; max-height: 14px; }
+.react-flow__controls-button:disabled { opacity: 0.35; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .dot { transition: none; } }

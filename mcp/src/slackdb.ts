@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { FLOW_FLOWS_DDL, flattenFlows } from "./flows.ts";
 
 export const SLACK_TAGS_DDL = `CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
@@ -32,6 +33,7 @@ export const SLACK_TASKS_DDL = `CREATE TABLE IF NOT EXISTS tasks (
   status TEXT NOT NULL DEFAULT '',
   archived INTEGER NOT NULL DEFAULT 0,
   number INTEGER,
+  reactions TEXT,
   PRIMARY KEY (tag, channel_id, thread_ts)
 )`;
 
@@ -71,7 +73,7 @@ function ensureNumbers(db: DatabaseSync): void {
 
 function upgrade(db: DatabaseSync): void {
   const version = (db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
-  if (version >= 5) return;
+  if (version >= 6) return;
   db.exec("BEGIN IMMEDIATE");
   try {
     const names = () => new Set((db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[]).map((c) => c.name));
@@ -92,6 +94,7 @@ function upgrade(db: DatabaseSync): void {
         ('todo', 'To-do', 'board', 'todo', '["loading","loading1"]', '["Todo","In progress","Blocked","Done"]', 0, 1),
         ('saved', 'Saved', 'list', 'saved', '[]', '[]', 1, 1)`);
     }
+    if (!names().has("reactions")) db.exec("ALTER TABLE tasks ADD COLUMN reactions TEXT");
     assignMissingNumbers(db);
     db.exec(SLACK_NUMBER_INDEX);
     const standard = JSON.stringify(STANDARD_COLUMNS);
@@ -102,7 +105,7 @@ function upgrade(db: DatabaseSync): void {
         if (next !== card.status) db.prepare("UPDATE tasks SET status = ? WHERE rowid = ?").run(next, card.rid);
       }
     }
-    db.exec("PRAGMA user_version = 5");
+    db.exec("PRAGMA user_version = 6");
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -121,6 +124,8 @@ export function openDb(file: string = dbPath()): DatabaseSync {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec(SLACK_TAGS_DDL);
   db.exec(SLACK_TASKS_DDL);
+  flattenFlows(db);
+  db.exec(FLOW_FLOWS_DDL);
   upgrade(db);
   ensureNumbers(db);
   return db;

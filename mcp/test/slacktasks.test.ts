@@ -313,3 +313,29 @@ test("getSlackTask returns the card with its tag name, or undefined", async () =
   assert.equal(task.archived, false);
   assert.equal(getSlackTask(db, 99), undefined);
 });
+
+test("reactions are stored on a new card and replaced on update; leaving them out keeps them", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, { ...BASE, reactions: ["loading"] }, NOW);
+  assert.equal(rows(db)[0].reactions, '["loading"]');
+  upsertSlackTask(db, { ...BASE, reactions: ["loading", "ticket"] }, NOW);
+  assert.equal(rows(db)[0].reactions, '["loading","ticket"]');
+  upsertSlackTask(db, { ...BASE, replies: 2 }, NOW);
+  assert.equal(rows(db)[0].reactions, '["loading","ticket"]');
+});
+
+test("reaction names must be plain emoji names", async () => {
+  const { db } = await fresh();
+  for (const bad of [[""], [":loading:"], ["a b"], "loading"]) {
+    assert.throws(() => upsertSlackTask(db, { ...BASE, reactions: bad as unknown as string[] }, NOW), /reactions/);
+  }
+  assert.equal(rows(db).length, 0);
+});
+
+test("get_slack_task returns the reactions as a list", async () => {
+  const { db } = await fresh();
+  upsertSlackTask(db, { ...BASE, reactions: ["ticket"] }, NOW);
+  upsertSlackTask(db, { ...BASE, thread_ts: "1794536057.111111", message_ts: "1794536057.111111", permalink: BASE.permalink.replace("965929", "111111") }, NOW);
+  assert.deepEqual(getSlackTask(db, 1)?.reactions, ["ticket"]);
+  assert.deepEqual(getSlackTask(db, 2)?.reactions, []);
+});

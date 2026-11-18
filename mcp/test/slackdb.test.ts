@@ -40,9 +40,9 @@ test("openDb creates the missing parent folder and the file", async () => {
   assert.ok((await stat(file)).isFile());
 });
 
-test("openDb sets user_version 5 and WAL mode", async () => {
+test("openDb sets user_version 6 and WAL mode", async () => {
   const db = openDb(await tmpFile());
-  assert.equal(version(db), 5);
+  assert.equal(version(db), 6);
   assert.equal((db.prepare("PRAGMA journal_mode").get() as { journal_mode: string }).journal_mode, "wal");
   db.close();
 });
@@ -104,7 +104,7 @@ test("openDb upgrades a v2 database with cards into the todo tag", async () => {
     { tag: "todo", thread_ts: "2.2", status: "Done", archived: 1, summary: null },
     { tag: "todo", thread_ts: "3.3", status: "In progress", archived: 0, summary: null },
   ]);
-  assert.equal(version(db), 5);
+  assert.equal(version(db), 6);
   assert.equal((db.prepare("SELECT COUNT(*) n FROM tags").get() as { n: number }).n, 2);
   db.close();
 });
@@ -116,7 +116,7 @@ test("openDb upgrades a v1 database through v2 to v3 and keeps its rows", async 
   for (const name of ["tag", "summary", "next_action", "summary_replies"]) assert.ok(columns(db).includes(name), name);
   const row = db.prepare("SELECT tag, status FROM tasks").get() as { tag: string; status: string };
   assert.deepEqual({ ...row }, { tag: "todo", status: "Blocked" });
-  assert.equal(version(db), 5);
+  assert.equal(version(db), 6);
   db.close();
   openDb(file).close();
 });
@@ -127,7 +127,7 @@ test("two opens on one old file at the same time both succeed", async () => {
   const a = openDb(file);
   const b = openDb(file);
   assert.equal((a.prepare("SELECT COUNT(*) n FROM tasks").get() as { n: number }).n, 1);
-  assert.equal(version(b), 5);
+  assert.equal(version(b), 6);
   a.close();
   b.close();
 });
@@ -179,7 +179,7 @@ test("openDb upgrades a v3 database and numbers the cards by tagged date then ro
     { tag: "saved", thread_ts: "1.1", status: "", number: 2 },
     { tag: "todo", thread_ts: "3.3", status: "Blocked", number: 3 },
   ]);
-  assert.equal(version(db), 5);
+  assert.equal(version(db), 6);
   db.close();
   openDb(file).close();
 });
@@ -229,7 +229,7 @@ test("openDb upgrades a v4 database: board columns and statuses are normalised, 
   assert.equal(columnsOf["todo"], STANDARD_JSON);
   assert.equal(columnsOf["ticket-oncall"], STANDARD_JSON);
   assert.equal(columnsOf["saved"], "[]");
-  assert.equal(version(db), 5);
+  assert.equal(version(db), 6);
   db.close();
   const again = openDb(file);
   assert.deepEqual(again.prepare("SELECT status FROM tasks ORDER BY number").all().map((r) => (r as { status: string }).status), got);
@@ -244,7 +244,7 @@ test("two opens on one v4 file both succeed", async () => {
   raw.close();
   const a = openDb(file);
   const b = openDb(file);
-  assert.equal(version(b), 5);
+  assert.equal(version(b), 6);
   a.close();
   b.close();
 });
@@ -255,4 +255,24 @@ test("the Swift column constant equals STANDARD_COLUMNS", async () => {
   assert.ok(match, "SlackColumns.swift must define static let all");
   const names = [...match[1].matchAll(/"([^"]*)"/g)].map((m) => m[1]);
   assert.deepEqual(names, STANDARD_COLUMNS);
+});
+
+test("openDb upgrades a v5 database by adding the reactions column and keeps its cards", async () => {
+  const file = await tmpFile();
+  mkdirSync(dirname(file), { recursive: true });
+  const old = new DatabaseSync(file);
+  old.exec(SLACK_TAGS_DDL);
+  old.exec(V4_TASKS_DDL.replace("  reactions TEXT,\n", ""));
+  old.exec(SLACK_NUMBER_INDEX);
+  old.exec(`INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position, builtin) VALUES ('todo','To-do','board','todo','[]','${STANDARD_JSON}',0,1)`);
+  old.prepare("INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number) VALUES (?,?,?,?,?,?,?)").run("todo", "C", "1.1", "p", "2026-11-16", "Todo", 1);
+  old.exec("PRAGMA user_version = 5");
+  assert.ok(!columns(old).includes("reactions"));
+  old.close();
+  const db = openDb(file);
+  assert.ok(columns(db).includes("reactions"));
+  assert.equal(version(db), 6);
+  assert.deepEqual(db.prepare("SELECT thread_ts, reactions FROM tasks").all().map((r) => ({ ...r })), [{ thread_ts: "1.1", reactions: null }]);
+  db.close();
+  openDb(file).close();
 });

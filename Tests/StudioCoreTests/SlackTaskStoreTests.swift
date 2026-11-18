@@ -58,7 +58,7 @@ import Testing
         let path = tempPath()
         let store = try SlackTaskStore(path: path)
         #expect(FileManager.default.fileExists(atPath: path))
-        #expect(rawText(path, "PRAGMA user_version") == "5")
+        #expect(rawText(path, "PRAGMA user_version") == "6")
         #expect(rawText(path, "PRAGMA journal_mode") == "wal")
         #expect(try store.tags().map(\.id) == ["todo", "saved"])
         _ = try SlackTaskStore(path: path)
@@ -86,7 +86,7 @@ import Testing
         #expect(tasks.map(\.status) == ["Blocked", "Done", "In progress"])
         #expect(tasks.map(\.archived) == [false, true, false])
         #expect(tasks[0].summary == "Waiting on vendor." && tasks[0].summaryReplies == 2)
-        #expect(rawText(path, "PRAGMA user_version") == "5")
+        #expect(rawText(path, "PRAGMA user_version") == "6")
         #expect(try store.tags().count == 2)
         _ = try SlackTaskStore(path: path)
     }
@@ -102,7 +102,7 @@ import Testing
         let task = try #require(try store.tasks(tag: "todo", includeArchived: false).first)
         #expect(task.status == "Blocked")
         #expect(task.summary == nil && task.nextAction == nil && task.summaryReplies == nil)
-        #expect(rawText(path, "PRAGMA user_version") == "5")
+        #expect(rawText(path, "PRAGMA user_version") == "6")
     }
 
     @Test func addInsertsAPastedLinkInTheFirstColumnWithoutFacts() throws {
@@ -282,7 +282,7 @@ import Testing
         #expect(todo.map(\.number) == [1, 3])
         #expect(todo.map(\.status) == ["Done", "Blocked"])
         #expect(saved.map(\.number) == [2])
-        #expect(rawText(path, "PRAGMA user_version") == "5")
+        #expect(rawText(path, "PRAGMA user_version") == "6")
         _ = try SlackTaskStore(path: path)
     }
 
@@ -348,7 +348,7 @@ import Testing
         #expect(try statusesNow() == expected)
         let tags = Dictionary(uniqueKeysWithValues: try store.tags().map { ($0.id, $0.columns) })
         #expect(tags["todo"] == SlackColumns.all && tags["ticket-oncall"] == SlackColumns.all && tags["saved"] == [])
-        #expect(rawText(path, "PRAGMA user_version") == "5")
+        #expect(rawText(path, "PRAGMA user_version") == "6")
         _ = try SlackTaskStore(path: path)
         #expect(try statusesNow() == expected)
     }
@@ -375,5 +375,35 @@ import Testing
         #expect(try store.tasks(tags: ["todo", "review"], includeArchived: false).map(\.tag) == ["review"])
         #expect(Set(try store.tasks(tags: ["todo", "review"], includeArchived: true).map(\.tag)) == ["todo", "review"])
         #expect(try store.tasks(tags: [], includeArchived: true).isEmpty)
+    }
+
+    @Test func readsTheReactionsTheSyncToolStoredAndTreatsNullAsNone() throws {
+        let path = tempPath()
+        let store = try SlackTaskStore(path: path)
+        raw(path, """
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number, reactions) VALUES
+          ('todo', 'C', '1.1', 'p', '2026-11-16', 'Todo', 1, '["loading","ticket"]'),
+          ('todo', 'C', '2.1', 'p', '2026-11-16', 'Todo', 2, NULL)
+        """)
+        let cards = try store.tasks(tag: "todo", includeArchived: false)
+        #expect(cards.first { $0.threadTS == "1.1" }?.reactions == ["loading", "ticket"])
+        #expect(cards.first { $0.threadTS == "2.1" }?.reactions == [])
+    }
+
+    @Test func upgradesAV5DatabaseByAddingTheReactionsColumn() throws {
+        let path = tempPath()
+        try prepareFolder(path)
+        var sql = SlackTaskStore.tagsDDL + ";\n" + SlackTaskStore.tasksDDL.replacingOccurrences(of: "  reactions TEXT,\n", with: "") + ";\n" + SlackTaskStore.numberIndexDDL + ";\n"
+        sql += """
+        INSERT INTO tags (id, name, kind, slack_list, reactions, columns, position, builtin) VALUES ('todo', 'To-do', 'board', 'todo', '[]', '["Todo","In progress","Blocked","Done"]', 0, 1);
+        INSERT INTO tasks (tag, channel_id, thread_ts, permalink, tagged, status, number) VALUES ('todo', 'C', '1.1', 'p', '2026-11-16', 'Todo', 1);
+        PRAGMA user_version = 5;
+        """
+        raw(path, sql)
+        let store = try SlackTaskStore(path: path)
+        #expect(rawText(path, "PRAGMA user_version") == "6")
+        let card = try #require(try store.tasks(tag: "todo", includeArchived: false).first)
+        #expect(card.threadTS == "1.1" && card.reactions == [])
+        _ = try SlackTaskStore(path: path)
     }
 }
