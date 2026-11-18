@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import AppKit
 import StudioCore
-import UniformTypeIdentifiers
 
 struct FindRequest {
     let query: String
@@ -33,18 +32,18 @@ enum ViewMode: String { case view, edit, editPreview }
     @Published var searching = false
     @Published var sidebarFocus: URL?
     @Published var newItem: NewItem?
-    @Published private(set) var expansion = FolderExpansion()
+    @Published var expansion = FolderExpansion()
     @Published var findQuery = ""
     @Published private(set) var findFocusTick = 0
     @Published private(set) var promptFocusTick = 0
-    @Published private(set) var isAIRunning = false
+    @Published var isAIRunning = false
     @Published var aiError: String?
-    @Published private(set) var aiUndoText: String?
+    @Published var aiUndoText: String?
     let findRequests = PassthroughSubject<FindRequest, Never>()
     let formatRequests = PassthroughSubject<MarkdownFormat, Never>()
     @Published private(set) var playgroundKind: DocumentKind = .diagram
-    private let playgroundDirectory = Playground.defaultDirectory()
-    private var modeBeforePlayground: ViewMode?
+    let playgroundDirectory = Playground.defaultDirectory()
+    var modeBeforePlayground: ViewMode?
     @Published var theme: Theme = .light {
         didSet { defaults.set(theme.rawValue, forKey: "theme") }
     }
@@ -61,9 +60,9 @@ enum ViewMode: String { case view, edit, editPreview }
     private var javaURL: URL?
     private var dotURL: URL?
     private var renderTask: Task<Void, Never>?
-    private var watcher: FolderWatcher?
-    private let defaults = UserDefaults.standard
-    private let store = VaultStore.shared
+    var watcher: FolderWatcher?
+    let defaults = UserDefaults.standard
+    let store = VaultStore.shared
     private var vaultSub: AnyCancellable?
     private var defaultsSub: AnyCancellable?
 
@@ -115,8 +114,6 @@ enum ViewMode: String { case view, edit, editPreview }
         }
     }
 
-    var vaults: [Vault] { store.vaults }
-
     func windowClosed() {
         guard AppModel.active === self else { return }
         AppModel.active = nil
@@ -127,135 +124,6 @@ enum ViewMode: String { case view, edit, editPreview }
         AppModel.active = self
         store.hasWindow = true
         store.activePath = rootFolder?.standardizedFileURL.path
-    }
-
-    /// The vault whose folder is open.
-    var activeVault: Vault? { vaults.first { $0.path == rootFolder?.standardizedFileURL.path } }
-
-    func chooseRoot() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.prompt = "Use as Vault"
-        if panel.runModal() == .OK, let url = panel.url { openRoot(url) }
-    }
-
-    func switchVault(_ vault: Vault) {
-        guard FileManager.default.fileExists(atPath: vault.path) else { notice = "\(vault.name) is missing from disk."; return }
-        openRoot(vault.url)
-    }
-
-    func createVault(named name: String) {
-        var created: Vault?
-        perform {
-            try store.update { created = try $0.create(named: name, in: VaultList.defaultBase()) }
-        }
-        if let created { openRoot(created.url) }
-    }
-
-    private func updateVaults(_ change: (inout VaultList) -> Void) {
-        do { try store.update(change) } catch { notice = error.localizedDescription }
-    }
-
-    func openRoot(_ url: URL) {
-        if session?.isDirty == true {
-            notice = "Save or discard your changes before switching folders."
-            return
-        }
-        rootFolder = url
-        sidebarFocus = nil
-        newItem = nil
-        expansion = FolderExpansion(states: savedExpansion[url.standardizedFileURL.path] ?? [:])
-        defaults.set(url.path, forKey: "rootFolder")
-        updateVaults { $0.add(folder: url) }
-        store.activePath = url.standardizedFileURL.path
-        session = nil
-        selection = nil
-        rescan()
-        watcher?.stop()
-        watcher = FolderWatcher(root: url) { [weak self] in
-            Task { @MainActor in self?.folderChanged() }
-        }
-    }
-
-    private var savedExpansion: [String: [String: Bool]] {
-        defaults.dictionary(forKey: "folderExpansion") as? [String: [String: Bool]] ?? [:]
-    }
-
-    private func saveExpansion() {
-        guard let root = rootFolder?.standardizedFileURL.path else { return }
-        var all = savedExpansion
-        all[root] = expansion.states
-        defaults.set(all, forKey: "folderExpansion")
-    }
-
-    func isExpanded(_ folder: URL, default fallback: Bool) -> Bool {
-        expansion.isExpanded(folder.standardizedFileURL.path, default: fallback)
-    }
-
-    func setExpanded(_ folder: URL, _ expanded: Bool) {
-        expansion.set(folder.standardizedFileURL.path, expanded: expanded)
-        saveExpansion()
-    }
-
-    func rescan() {
-        guard let rootFolder else { tree = []; return }
-        tree = (try? LibraryScanner.scan(rootFolder)) ?? []
-    }
-
-    private func folderChanged() {
-        rescan()
-        guard let session else { return }
-        switch session.diskDidChange() {
-        case .none: break
-        case .reloaded: scheduleRender(debounce: false)
-        case .conflict: showConflict = true
-        case .fileMissing: notice = "\(session.url.lastPathComponent) was deleted or moved. Your text is still in the editor; Save writes it back."
-        }
-    }
-
-    /// Rewrites the open document from a plain-language instruction using the Claude CLI; the previous text stays available to undo.
-    func askAI(_ instruction: String) {
-        let prompt = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let session, !isAIRunning, !prompt.isEmpty else { return }
-        guard let claude = try? ToolLocator(searchDirs: ToolLocator.claudeDirs).claude() else {
-            aiError = "Claude Code was not found. Install it and sign in, then try again."
-            return
-        }
-        let before = session.text
-        let kind = DocumentKind(url: session.url)
-        isAIRunning = true
-        aiError = nil
-        Task {
-            defer { isAIRunning = false }
-            do {
-                let result = try await AIEditor(claude: claude).edit(before, instruction: prompt, kind: kind)
-                guard self.session === session, session.text == before else {
-                    aiError = "The file changed while Claude was working, so its result was discarded."
-                    return
-                }
-                aiUndoText = before
-                session.text = result
-                if inPlayground { try? session.save() }
-                scheduleRender(debounce: false)
-            } catch AIEditError.failed(let message) {
-                aiError = message.components(separatedBy: "\n").first ?? message
-            } catch AIEditError.timedOut {
-                aiError = "Claude took too long. Try a smaller change."
-            } catch AIEditError.emptyResponse {
-                aiError = "Claude returned nothing."
-            } catch {
-                aiError = error.localizedDescription
-            }
-        }
-    }
-
-    func undoAIEdit() {
-        guard let session, let text = aiUndoText else { return }
-        session.text = text
-        aiUndoText = nil
-        if inPlayground { try? session.save() }
-        scheduleRender(debounce: false)
     }
 
     /// True when a markdown file is open in a mode that shows the editor.
@@ -417,68 +285,6 @@ enum ViewMode: String { case view, edit, editPreview }
         do { try write(url) } catch { notice = "Export failed: \(error.localizedDescription)" }
     }
 
-    // MARK: sidebar operations
-
-    /// Starts naming a new file or folder in `folder`, else in the focused folder, else in the root.
-    func beginNew(_ kind: NewItemKind, in folder: URL? = nil) {
-        guard let rootFolder else { notice = "Add a vault first."; return }
-        closePlayground()
-        showTasks = false
-        showFlows = false
-        showSidebar = true
-        searching = false
-        query = ""
-        newItem = NewItem(kind: kind, parent: folder ?? LibraryOperations.targetFolder(for: sidebarFocus, root: rootFolder))
-    }
-
-    /// Creates the item being named, or drops it when the name is empty.
-    func commitNewItem(named name: String) {
-        guard let item = newItem else { return }
-        newItem = nil
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        switch item.kind {
-        case .file: createFile(named: name, in: item.parent)
-        case .folder: createFolder(named: name, in: item.parent)
-        }
-    }
-
-    func toggleSearch() {
-        closePlayground()
-        showTasks = false
-        showFlows = false
-        showSidebar = true
-        searching.toggle()
-        query = ""
-    }
-
-    func createFile(named name: String, in folder: URL?) {
-        guard let target = folder ?? rootFolder else { notice = "Open a folder first."; return }
-        perform { let url = try LibraryOperations.createFile(named: name, in: target); rescan(); select(url) }
-    }
-
-    func createFolder(named name: String, in folder: URL?) {
-        guard let target = folder ?? rootFolder else { notice = "Open a folder first."; return }
-        perform { _ = try LibraryOperations.createFolder(named: name, in: target); rescan() }
-    }
-
-    // MARK: playground
-
-    var inPlayground: Bool {
-        guard let session else { return false }
-        return Playground.contains(session.url, in: playgroundDirectory)
-    }
-
-    /// Opens the scratch editor for `kind` (the last one used by default). Its text is kept between launches.
-    func openPlayground(kind: DocumentKind? = nil) {
-        showTasks = false
-        showFlows = false
-        guard let url = try? Playground.ensureFile(for: kind ?? playgroundKind, in: playgroundDirectory) else {
-            notice = "Could not open the playground."
-            return
-        }
-        select(url)
-    }
-
     /// Shows the Slack tasks board in place of the file detail.
     func openTasks() {
         if inPlayground { closePlayground() }
@@ -493,76 +299,4 @@ enum ViewMode: String { case view, edit, editPreview }
         showFlows = true
     }
 
-    /// Leaves the playground and returns to the file list with nothing open.
-    func closePlayground() {
-        guard inPlayground else { return }
-        if session?.isDirty == true { save() }
-        session = nil
-        selection = nil
-        markdownPreview = nil
-        lastSVG = nil
-        if let saved = modeBeforePlayground { mode = saved; modeBeforePlayground = nil }
-    }
-
-    /// Writes the playground text to a file the user picks, then opens it from the library.
-    func saveCopyOfPlayground() {
-        guard let session, inPlayground else { return }
-        let ext = playgroundKind == .markdown ? "md" : "puml"
-        let panel = NSSavePanel()
-        panel.directoryURL = rootFolder
-        panel.nameFieldStringValue = "untitled.\(ext)"
-        if let type = UTType(filenameExtension: ext) { panel.allowedContentTypes = [type] }
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try session.text.write(to: url, atomically: true, encoding: .utf8)
-            rescan()
-            select(url)
-        } catch { notice = "Save failed: \(error.localizedDescription)" }
-    }
-
-    func rename(_ url: URL, to name: String) {
-        perform {
-            let renamed = try LibraryOperations.rename(url, to: name)
-            rescan()
-            if session?.url == url {
-                session?.relocate(to: renamed)
-                selection = renamed
-                defaults.set(renamed.path, forKey: "lastFile")
-            }
-        }
-    }
-
-    /// Moves dropped items from this vault into `folder`; anything outside the vault is ignored.
-    func move(_ urls: [URL], into folder: URL) {
-        guard let root = rootFolder?.standardizedFileURL.path else { return }
-        for url in urls where url.standardizedFileURL.path.hasPrefix(root + "/") {
-            perform {
-                let moved = try LibraryOperations.move(url, into: folder)
-                guard moved != url else { return }
-                expansion.remap(from: url.standardizedFileURL.path, to: moved.standardizedFileURL.path)
-                if let open = session?.url, let new = LibraryOperations.relocated(open, from: url, to: moved) {
-                    session?.relocate(to: new)
-                    selection = new
-                    defaults.set(new.path, forKey: "lastFile")
-                }
-                setExpanded(folder, true)
-            }
-        }
-        rescan()
-    }
-
-    func delete(_ url: URL) {
-        perform {
-            try LibraryOperations.delete(url)
-            if session?.url.path.hasPrefix(url.path) == true { session = nil; selection = nil }
-            rescan()
-        }
-    }
-
-    private func perform(_ work: () throws -> Void) {
-        do { try work() } catch LibraryOperationError.alreadyExists { notice = "That name already exists." }
-        catch LibraryOperationError.invalidName { notice = "That name is not valid." }
-        catch LibraryOperationError.invalidMove { notice = "A folder cannot move into itself." }
-        catch { notice = error.localizedDescription }
-    }
 }
