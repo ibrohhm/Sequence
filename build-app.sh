@@ -8,7 +8,7 @@ APP=build/Sequence.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$(swift build -c release --show-bin-path)/SequenceApp" "$APP/Contents/MacOS/Sequence"
-cp App/Resources/plantuml.jar App/Resources/PLANTUML_VERSION App/Resources/marked.min.js App/Resources/flow.html App/Resources/flow.js App/Resources/flow.css App/Resources/AppIcon.icns "$APP/Contents/Resources/"
+cp App/Resources/plantuml.jar App/Resources/PLANTUML_VERSION App/Resources/marked.min.js App/Resources/markdown.js App/Resources/markdown.css App/Resources/diagram-context.js App/Resources/flow.html App/Resources/flow.js App/Resources/flow.css App/Resources/AppIcon.icns "$APP/Contents/Resources/"
 # Self-contained Java runtime (jlink'd from the installed JDK), so the app needs no Java on the target Mac.
 JRE=build/jre
 if [ ! -x "$JRE/bin/java" ]; then
