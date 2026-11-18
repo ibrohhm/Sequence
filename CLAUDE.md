@@ -27,6 +27,7 @@ Personal Mac app (SwiftUI, no Xcode) to browse, view and edit PlantUML and markd
 
 - `./test.sh`: run tests. Only Command Line Tools are installed (macOS too old for Xcode), so tests use Swift Testing with CLT framework flags. Do not use `swift test` directly or XCTest.
 - `./build-app.sh`: build `build/Sequence.app`. Quit the running app (⌘Q) first, or reopening shows the old build.
+- After every app change: quit the running app (`osascript -e 'quit app "Sequence"'`, wait until it exits), run `./build-app.sh`, then `open build/Sequence.app`.
 - Run `./test.sh` before every commit.
 - Version: the `VERSION` file (semver `major.minor.patch`) is the single source; `build-app.sh` writes it into Info.plist and About shows it. Every commit that changes the app bumps it in that same commit, by commit type: `feat` = minor (patch resets to 0), `fix`/`refactor`/`perf` = patch, a breaking change (removed shortcut, changed file or settings format) = major (minor and patch reset). `docs`/`test`/`chore`/`build`/`ci` do not bump. Say the new version in the commit report.
 

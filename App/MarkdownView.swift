@@ -87,7 +87,7 @@ struct MarkdownView: NSViewRepresentable {
     img { max-width:100%; }
     hr { border:0; border-top:1px solid var(--line); }
     .diagram { text-align:center; background:var(--diagram-bg); border:1px solid var(--line); border-radius:6px; padding:12px; margin:1em 0; overflow:auto; }
-    .diagram svg { max-width:100%; height:auto; }
+    .diagram svg { max-width:100%; height:auto !important; }
     .error { background:rgba(207,34,46,.12); color:inherit; white-space:pre-wrap; }
     .pending { color:var(--muted); }
     """
