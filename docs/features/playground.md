@@ -1,0 +1,3 @@
+# Playground
+
+- Playground: scratch files live in Application Support (`Playground` in `StudioCore`), one for PlantUML and one for markdown. `AppModel.inPlayground` is true when the open session is one of them; it hides the sidebar (the rail's Files button calls `closePlayground()`), forces Edit with preview, autosaves on typing, and swaps the top bar controls for Save to folder. The two playgrounds are separate entries in the sidebar header menu and the File menu (⌘⇧P, ⌘⇧M), and the empty "Select a file" state (`PlaygroundChoices` in `RootView`: rows styled like sidebar rows, also on the choose-folder screen); there is no language switch.
